@@ -96,7 +96,7 @@ function Ready({ email, name }: { email: string; name: string }) {
 function Splash() {
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center gap-4">
-      <img src="/favicon.svg" alt="" className="size-14 rounded-2xl shadow-xl shadow-indigo-500/30 anim-pop" />
+      <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-14 rounded-2xl shadow-xl shadow-indigo-500/30 anim-pop" />
       <Loader2 className="size-5 animate-spin text-muted" />
     </div>
   )

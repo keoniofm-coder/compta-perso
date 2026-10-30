@@ -1,0 +1,18 @@
+name: Supabase keep-alive
+
+# Un projet Supabase gratuit est mis en pause après 7 jours sans requête.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsS -o /dev/null -w "supabase %{http_code}\n" \
+            -H "apikey: sb_publishable_tXFClPCmucfcnGIYGS6QXQ_SCXDMGQh" \
+            "https://tjyiksoqntpmmdkjcrgs.supabase.co/rest/v1/records?select=id&limit=1"

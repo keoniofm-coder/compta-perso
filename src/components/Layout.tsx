@@ -191,7 +191,7 @@ export function Layout({ route, email }: { route: string; email: string }) {
       {/* Barre latérale (ordinateur) */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[264px] flex-col border-r border-line bg-surface/70 backdrop-blur-xl z-30">
         <div className="flex items-center gap-3 px-6 h-20">
-          <img src="/favicon.svg" alt="" className="size-10 rounded-xl shadow-lg shadow-indigo-500/30" />
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-10 rounded-xl shadow-lg shadow-indigo-500/30" />
           <div>
             <div className="font-bold text-lg tracking-tight text-ink leading-none">Trezo</div>
             <div className="text-[11.5px] text-muted mt-1">Compta & patrimoine</div>
@@ -234,7 +234,7 @@ export function Layout({ route, email }: { route: string; email: string }) {
       {/* En-tête */}
       <header className="sticky top-0 z-20 bg-page/80 backdrop-blur-xl border-b border-line lg:border-transparent safe-top">
         <div className="flex items-center gap-2 h-14 lg:h-16 px-4 sm:px-6 lg:px-10 max-w-[1400px] mx-auto">
-          <img src="/favicon.svg" alt="" className="size-8 rounded-lg lg:hidden" />
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-8 rounded-lg lg:hidden" />
           <div className="min-w-0 flex-1">
             <div className="font-semibold text-ink truncate lg:hidden">{current.label}</div>
             <div className="lg:hidden"><SyncBadge compact /></div>

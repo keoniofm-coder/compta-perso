@@ -44,7 +44,7 @@ export function AuthPage() {
         <div className="absolute -right-24 -top-24 size-96 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute -left-20 bottom-10 size-80 rounded-full bg-sky-400/20 blur-3xl" />
         <div className="relative flex items-center gap-3">
-          <img src="/favicon.svg" alt="" className="size-11 rounded-xl ring-2 ring-white/30" />
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-11 rounded-xl ring-2 ring-white/30" />
           <span className="text-xl font-bold tracking-tight">Trezo</span>
         </div>
         <div className="relative max-w-lg">
@@ -68,7 +68,7 @@ export function AuthPage() {
       <div className="flex flex-col">
         <div className="lg:hidden hero-gradient text-white px-6 pt-12 pb-16 rounded-b-[2rem]">
           <div className="flex items-center gap-3">
-            <img src="/favicon.svg" alt="" className="size-10 rounded-xl ring-2 ring-white/30" />
+            <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-10 rounded-xl ring-2 ring-white/30" />
             <span className="text-xl font-bold tracking-tight">Trezo</span>
           </div>
           <h1 className="mt-6 text-3xl font-bold tracking-tight leading-tight">Ta compta perso & pro, enfin claire.</h1>

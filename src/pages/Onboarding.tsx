@@ -63,7 +63,7 @@ export function Onboarding({ defaultName }: { defaultName: string }) {
     <div className="min-h-dvh flex items-start sm:items-center justify-center px-4 py-10 sm:py-16">
       <div className="w-full max-w-2xl">
         <div className="flex items-center gap-3 mb-8 anim-fade-up">
-          <img src="/favicon.svg" alt="" className="size-11 rounded-xl shadow-lg shadow-indigo-500/30" />
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-11 rounded-xl shadow-lg shadow-indigo-500/30" />
           <div>
             <div className="text-xs font-semibold uppercase tracking-wider text-indigo-500">Bienvenue sur Trezo</div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink">{step === 0 ? 'On configure ton espace' : 'Tes comptes de départ'}</h1>

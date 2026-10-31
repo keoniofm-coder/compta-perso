@@ -10,9 +10,7 @@ jobs:
       - run: |
           K=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqeWlrc29xbnRwbW1ka2pjcmdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNzM3NDcsImV4cCI6MjEwODk0OTc0N30.g7f_wd3vm5DspV_h6OUD8Cq9sScnzP8bTlDW8pKnSjQ
           U=https://tjyiksoqntpmmdkjcrgs.supabase.co/functions/v1/market
-          echo "--- search microstrategy"; curl -sS -H "Authorization: Bearer $K" "$U?q=microstrategy" | head -c 1500; echo
-          echo "--- search ISIN"; curl -sS -H "Authorization: Bearer $K" "$U?q=FR0011869353" | head -c 800; echo
-          echo "--- search air liquide"; curl -sS -H "Authorization: Bearer $K" "$U?q=air%20liquide" | head -c 800; echo
-          echo "--- quotes"; curl -sS -H "Authorization: Bearer $K" "$U?symbols=MSTR,AI.PA,CW8.PA,EWLD.PA,VUSA.L,BTC-EUR,NOPE123"; echo
-          echo "--- no auth"; curl -sS -o /dev/null -w "%{http_code}\n" "$U?symbols=MSTR"
-          echo "--- preflight"; curl -sS -i -X OPTIONS -H "Origin: https://keoniofm-coder.github.io" -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Headers: authorization,apikey,x-client-info" "$U?symbols=MSTR" | head -12
+          echo "--- search mstr"; curl -sS -H "Authorization: Bearer $K" "$U?q=mstr" | head -c 600; echo
+          echo "--- search ISIN LU1681043599"; curl -sS -H "Authorization: Bearer $K" "$U?q=LU1681043599" | head -c 600; echo
+          echo "--- search strategy"; curl -sS -H "Authorization: Bearer $K" "$U?q=strategy" | head -c 600; echo
+          echo "--- search amundi msci world"; curl -sS -H "Authorization: Bearer $K" "$U?q=amundi%20msci%20world" | head -c 900; echo

@@ -166,8 +166,9 @@ export function computeDerived(db: DB, convert: Converter, base: string, liveRat
     let price = r.price
     let priceSource: HoldingStat['priceSource'] = ops.length ? 'manual' : 'none'
     let priceDate = r.priceDate
-    if (h.autoPrice && h.cryptoId && liveRates[`cg:${h.cryptoId}`]) {
-      price = convert(liveRates[`cg:${h.cryptoId}`], 'EUR', h.currency)
+    const liveKey = !h.autoPrice ? '' : h.cryptoId ? `cg:${h.cryptoId}` : h.quoteSymbol ? `yf:${h.quoteSymbol}` : ''
+    if (liveKey && liveRates[liveKey]) {
+      price = convert(liveRates[liveKey], 'EUR', h.currency)
       if (h.mode === 'amount') price = r.price
       else {
         priceSource = 'live'

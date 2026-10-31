@@ -93,6 +93,8 @@ export interface Holding {
   /** units : quantité × prix ; amount : versements + valorisation (assurance-vie, SCPI…). */
   mode: 'units' | 'amount'
   cryptoId?: string
+  /** Symbole Yahoo Finance (ex. MSTR, AI.PA, CW8.PA) pour le cours en direct des actions, ETF, fonds. */
+  quoteSymbol?: string
   autoPrice?: boolean
   note?: string
   archived?: boolean

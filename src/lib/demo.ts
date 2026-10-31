@@ -91,8 +91,8 @@ export function buildDemo(): Item[] {
   const btc: Holding = { id: uid(), accountId: binance.id, name: 'Bitcoin', symbol: 'BTC', assetClass: 'crypto', currency: 'EUR', mode: 'units', cryptoId: 'bitcoin', autoPrice: true }
   const eth: Holding = { id: uid(), accountId: binance.id, name: 'Ethereum', symbol: 'ETH', assetClass: 'crypto', currency: 'EUR', mode: 'units', cryptoId: 'ethereum', autoPrice: true }
   const sol: Holding = { id: uid(), accountId: binance.id, name: 'Solana', symbol: 'SOL', assetClass: 'crypto', currency: 'EUR', mode: 'units', cryptoId: 'solana', autoPrice: true }
-  const cw8: Holding = { id: uid(), accountId: pea.id, name: 'Amundi PEA Monde', symbol: 'EWLD', assetClass: 'etf', currency: 'EUR', mode: 'units' }
-  const ai: Holding = { id: uid(), accountId: pea.id, name: 'Air Liquide', symbol: 'AI', assetClass: 'action', currency: 'EUR', mode: 'units' }
+  const cw8: Holding = { id: uid(), accountId: pea.id, name: 'Amundi PEA Monde', symbol: 'EWLD', assetClass: 'etf', currency: 'EUR', mode: 'units', quoteSymbol: 'EWLD.PA', autoPrice: true }
+  const ai: Holding = { id: uid(), accountId: pea.id, name: 'Air Liquide', symbol: 'AI', assetClass: 'action', currency: 'EUR', mode: 'units', quoteSymbol: 'AI.PA', autoPrice: true }
   const avh: Holding = { id: uid(), accountId: av.id, name: 'Assurance-vie Linxea Spirit 2', assetClass: 'assurance_vie', currency: 'EUR', mode: 'amount' }
   for (const h of [btc, eth, sol, cw8, ai, avh]) add('holdings', h)
   const op = (o: Omit<HoldingOp, 'id' | 'createdAt' | 'fees'> & { fees?: number }) => {

@@ -21,6 +21,7 @@ npm run dev          # http://localhost:5173
 
 - `supabase/migrations/001_init.sql` : schéma, RLS, liste d'inscription sur invitation.
 - `supabase/functions/signup` : fonction d'inscription (vérifie le code d'invitation).
+- `supabase/functions/market` : recherche et cours de bourse (actions, ETF, fonds) relayés depuis Yahoo Finance, réservée aux utilisateurs connectés. Les cryptos passent par CoinGecko.
 - Le code d'invitation et le nombre max de comptes sont dans `private.app_config` (à modifier depuis l'éditeur SQL, jamais dans le code).
 
 Variables optionnelles : `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY` (clé publishable).

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { fetchQuotes } from './market'
 
 export interface CurrencyDef {
   code: string
@@ -239,6 +240,12 @@ export function registerCryptoIds(ids: string[]) {
   extraCryptoIds = Array.from(new Set(ids.filter(Boolean)))
 }
 
+let quoteSymbols: string[] = []
+/** Symboles de bourse suivis en direct (stockés dans les taux sous `yf:<symbole>`, en EUR). */
+export function registerQuoteSymbols(symbols: string[]) {
+  quoteSymbols = Array.from(new Set(symbols.filter(Boolean)))
+}
+
 export const useRates = create<RatesState>((set, get) => {
   const cached = loadCachedRates()
   return {
@@ -269,6 +276,20 @@ export const useRates = create<RatesState>((set, get) => {
         ok = true
       } catch {
         set({ error: 'Cours crypto indisponibles pour le moment' })
+      }
+      if (quoteSymbols.length) {
+        try {
+          const quotes = await fetchQuotes(quoteSymbols)
+          for (const [sym, q] of Object.entries(quotes)) {
+            const eurPerUnit = next[q.currency]
+            if (!eurPerUnit) continue
+            next[`yf:${sym}`] = q.price * eurPerUnit
+            if (q.previous) next[`yfp:${sym}`] = q.previous * eurPerUnit
+          }
+          ok = true
+        } catch {
+          set({ error: 'Cours de bourse indisponibles pour le moment' })
+        }
       }
       const at = ok ? Date.now() : get().fetchedAt
       set({ rates: next, fetchedAt: at, loading: false })

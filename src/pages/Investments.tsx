@@ -17,6 +17,9 @@ function HoldingRow({ h }: { h: HoldingStat }) {
   const cm = ASSET_CLASSES[h.holding.assetClass]
   const cur = h.holding.currency
   const isAmount = h.holding.mode === 'amount'
+  const rates = useRates((s) => s.rates)
+  const qs = h.holding.quoteSymbol
+  const dayChange = h.priceSource === 'live' && qs && rates[`yfp:${qs}`] ? rates[`yf:${qs}`] / rates[`yfp:${qs}`] - 1 : undefined
   return (
     <div className="border-t border-line first:border-t-0">
       <button type="button" onClick={() => setOpen(!open)} className="w-full grid grid-cols-[1fr_auto] md:grid-cols-[minmax(0,2.2fr)_1fr_1fr_1.1fr_1.2fr_28px] items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-2/70 transition-colors">
@@ -40,7 +43,7 @@ function HoldingRow({ h }: { h: HoldingStat }) {
           ) : (
             <>
               <Money value={h.price} currency={cur} className="text-ink-2" />
-              <div className="text-[11.5px]">{h.priceSource === 'live' ? <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400 font-medium"><Zap className="size-3" />direct</span> : <span className="text-muted">{h.priceDate ? dateLabel(h.priceDate, { day: 'numeric', month: 'short' }) : ''}</span>}</div>
+              <div className="text-[11.5px]">{h.priceSource === 'live' ? <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400 font-medium"><Zap className="size-3" />direct{dayChange !== undefined && <span className={dayChange >= 0 ? 'text-pos' : 'text-neg'}>{` · ${formatPct(dayChange)}`}</span>}</span> : <span className="text-muted">{h.priceDate ? dateLabel(h.priceDate, { day: 'numeric', month: 'short' }) : ''}</span>}</div>
             </>
           )}
         </div>

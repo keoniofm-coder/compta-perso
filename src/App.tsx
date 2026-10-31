@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { Layout } from './components/Layout'
 import { ModalHost } from './components/ModalHost'
 import { ConfirmHost, ToastHost } from './components/ui'
-import { registerCryptoIds, setCustomCryptos, useRates } from './lib/currency'
+import { registerCryptoIds, registerQuoteSymbols, setCustomCryptos, useRates } from './lib/currency'
 import { setCustomCategories } from './lib/meta'
 import { LOCAL_USER, useData, useSettings } from './lib/store'
 import { supabase } from './lib/supabase'
@@ -77,6 +77,7 @@ function Ready({ email, name }: { email: string; name: string }) {
 
   useEffect(() => {
     registerCryptoIds(Object.values(holdings).map((h) => h.cryptoId ?? ''))
+    registerQuoteSymbols(Object.values(holdings).map((h) => (h.autoPrice && !h.archived && h.quoteSymbol) || ''))
     void refresh()
     const t = setInterval(() => void refresh(), 15 * 60 * 1000)
     return () => clearInterval(t)

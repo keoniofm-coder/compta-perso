@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Search, Trash2 } from 'lucide-react'
+import { Link2Off, Loader2, Search, Trash2, Zap } from 'lucide-react'
 import { AccountSelect } from '../components/common'
 import { AmountInput, Button, Field, Input, Modal, Segmented, Switch, cx } from '../components/ui'
 import { replayHolding, useDerived } from '../lib/calc'
-import { CRYPTO, fetchCryptoPrice, formatMoney, formatNumber, parseAmount, registerCryptoIds, searchCrypto, useRates } from '../lib/currency'
+import { CRYPTO, fetchCryptoPrice, formatMoney, formatNumber, parseAmount, registerCryptoIds, registerQuoteSymbols, searchCrypto, useRates } from '../lib/currency'
+import { fetchQuote, marketTypeLabel, searchMarket, type MarketQuote, type MarketResult } from '../lib/market'
 import { today } from '../lib/dates'
 import { ASSET_CLASS_ORDER, ASSET_CLASSES } from '../lib/meta'
 import { uid, useData } from '../lib/store'
@@ -73,6 +74,68 @@ function CryptoSearch({ onPick }: { onPick: (c: { id: string; symbol: string; na
   )
 }
 
+function MarketSearch({ onPick }: { onPick: (r: MarketResult) => void }) {
+  const [q, setQ] = useState('')
+  const [res, setRes] = useState<MarketResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    setError('')
+    if (q.trim().length < 2) {
+      setRes([])
+      return
+    }
+    const t = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const r = await searchMarket(q.trim())
+        setRes(r)
+        if (!r.length) setError('Aucun résultat. Essaie le ticker (ex. MSTR, CW8) ou le code ISIN.')
+      } catch (e) {
+        setRes([])
+        setError((e as Error).message.startsWith('Connecte') ? (e as Error).message : 'Recherche indisponible pour le moment')
+      } finally {
+        setLoading(false)
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [q])
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="size-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+        <Input className="pl-9" placeholder="Rechercher : nom, ticker ou ISIN (ex. Strategy, MSTR, CW8…)" value={q} onChange={(e) => setQ(e.target.value)} />
+        {loading && <Loader2 className="size-4 text-muted absolute right-3 top-1/2 -translate-y-1/2 animate-spin" />}
+      </div>
+      {error && <p className="text-xs text-muted">{error}</p>}
+      {res.length > 0 && (
+        <div className="rounded-xl border border-line divide-y divide-line max-h-64 overflow-y-auto">
+          {res.map((r) => (
+            <button
+              key={r.symbol}
+              type="button"
+              onClick={() => {
+                onPick(r)
+                setQ('')
+                setRes([])
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface-2 text-left"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-ink truncate">{r.name}</span>
+                <span className="block text-xs text-muted truncate">
+                  {r.symbol} · {r.exchange}
+                </span>
+              </span>
+              <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">{marketTypeLabel(r)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function HoldingForm({ onClose, id, accountId: acc0 }: { onClose: () => void; id?: string; accountId?: string }) {
   const d = useDerived()
   const accounts = useActiveAccounts()
@@ -87,6 +150,8 @@ export function HoldingForm({ onClose, id, accountId: acc0 }: { onClose: () => v
   const [symbol, setSymbol] = useState(existing?.symbol ?? '')
   const [currency, setCurrency] = useState(existing?.currency ?? (acc && acc.currency.length === 3 && !CRYPTO.some((c) => c.code === acc.currency) ? acc.currency : d.base))
   const [cryptoId, setCryptoId] = useState(existing?.cryptoId ?? '')
+  const [quoteSymbol, setQuoteSymbol] = useState(existing?.quoteSymbol ?? '')
+  const [quote, setQuote] = useState<(MarketQuote & { symbol: string }) | undefined>()
   const [autoPrice, setAutoPrice] = useState(existing?.autoPrice ?? true)
   const [note, setNote] = useState(existing?.note ?? '')
   const [archived, setArchived] = useState(!!existing?.archived)
@@ -115,6 +180,38 @@ export function HoldingForm({ onClose, id, accountId: acc0 }: { onClose: () => v
     }
   }
 
+  // Cours de l'actif lié, pour l'aperçu (valeur exacte, devise de cotation).
+  useEffect(() => {
+    if (!quoteSymbol) return setQuote(undefined)
+    let alive = true
+    fetchQuote(quoteSymbol)
+      .then((q) => alive && setQuote(q ? { ...q, symbol: quoteSymbol } : undefined))
+      .catch(() => alive && setQuote(undefined))
+    return () => {
+      alive = false
+    }
+  }, [quoteSymbol])
+
+  const pickMarket = async (r: MarketResult) => {
+    if (!existing || !name.trim()) setName(r.name)
+    setSymbol(r.symbol.split('.')[0])
+    setQuoteSymbol(r.symbol)
+    setAutoPrice(true)
+    if (!existing && (r.type === 'ETF' || r.type === 'EQUITY' || r.type === 'MUTUALFUND')) setAssetClass(r.type === 'ETF' ? 'etf' : r.type === 'MUTUALFUND' ? 'fonds' : 'action')
+    if (!existing) setMode('units')
+    if (!existing && !price) {
+      try {
+        const q = await fetchQuote(r.symbol)
+        if (q) {
+          const p = d.convert(q.price, q.currency, currency)
+          if (p) setPrice(String(+p.toFixed(p > 1 ? 2 : 4)).replace('.', ','))
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   const save = () => {
     if (!accountId) return setError('Choisis le compte qui détient ce placement')
     if (!name.trim()) return setError('Donne un nom au placement')
@@ -128,7 +225,8 @@ export function HoldingForm({ onClose, id, accountId: acc0 }: { onClose: () => v
       currency,
       mode,
       cryptoId: assetClass === 'crypto' && cryptoId ? cryptoId : undefined,
-      autoPrice: assetClass === 'crypto' && cryptoId ? autoPrice : undefined,
+      quoteSymbol: assetClass !== 'crypto' && mode === 'units' && quoteSymbol ? quoteSymbol : undefined,
+      autoPrice: (assetClass === 'crypto' && cryptoId) || (assetClass !== 'crypto' && mode === 'units' && quoteSymbol) ? autoPrice : undefined,
       note: note.trim() || undefined,
       archived: archived || undefined,
     }
@@ -167,8 +265,10 @@ export function HoldingForm({ onClose, id, accountId: acc0 }: { onClose: () => v
       }
     }
     useData.getState().putMany(items)
-    if (h.cryptoId) {
-      registerCryptoIds([...Object.values(d.db.holdings).map((x) => x.cryptoId ?? ''), h.cryptoId])
+    if (h.cryptoId || h.quoteSymbol) {
+      const all = [...Object.values(d.db.holdings).filter((x) => x.id !== h.id), h]
+      registerCryptoIds(all.map((x) => x.cryptoId ?? ''))
+      registerQuoteSymbols(all.map((x) => (x.autoPrice && !x.archived && x.quoteSymbol) || ''))
       void refreshRates(true)
     }
     toast(existing ? 'Placement mis à jour' : 'Placement ajouté')
@@ -222,6 +322,33 @@ export function HoldingForm({ onClose, id, accountId: acc0 }: { onClose: () => v
         </div>
 
         {assetClass === 'crypto' && !existing && <CryptoSearch onPick={pickCrypto} />}
+        {assetClass !== 'crypto' && mode === 'units' && !quoteSymbol && <MarketSearch onPick={pickMarket} />}
+        {assetClass !== 'crypto' && mode === 'units' && quoteSymbol && (
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 flex items-center gap-3">
+            <span className="size-9 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Zap className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-ink truncate">
+                {quoteSymbol}
+                {quote?.exchange ? <span className="font-normal text-muted"> · {quote.exchange}</span> : null}
+              </div>
+              <div className="text-xs text-muted">
+                {quote ? (
+                  <>
+                    Cours : <b className="text-ink">{formatMoney(quote.price, quote.currency)}</b>
+                    {quote.currency !== currency && d.convert(quote.price, quote.currency, currency) ? ` ≈ ${formatMoney(d.convert(quote.price, quote.currency, currency), currency)}` : ''}
+                  </>
+                ) : (
+                  'Cours en direct'
+                )}
+              </div>
+            </div>
+            <Button size="sm" variant="ghost" icon={Link2Off} onClick={() => setQuoteSymbol('')}>
+              Délier
+            </Button>
+          </div>
+        )}
 
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Nom">
@@ -255,6 +382,9 @@ export function HoldingForm({ onClose, id, accountId: acc0 }: { onClose: () => v
 
         {assetClass === 'crypto' && cryptoId && mode === 'units' && (
           <Switch checked={autoPrice} onChange={setAutoPrice} label="Cours en direct" hint={`Mis à jour automatiquement (CoinGecko : ${cryptoId})`} />
+        )}
+        {assetClass !== 'crypto' && quoteSymbol && mode === 'units' && (
+          <Switch checked={autoPrice} onChange={setAutoPrice} label="Cours en direct" hint={`Mis à jour automatiquement (${quoteSymbol}${quote && quote.currency !== currency ? `, coté en ${quote.currency} et converti en ${currency}` : ''})`} />
         )}
 
         {!existing && (

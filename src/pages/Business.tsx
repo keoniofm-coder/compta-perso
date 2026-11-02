@@ -1,20 +1,26 @@
 import { useMemo, useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, BriefcaseBusiness, CheckCircle2, Clock, Percent, Plus, Receipt, Users } from 'lucide-react'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, BriefcaseBusiness, CheckCircle2, Clock, Percent, Plus, Receipt, Users } from 'lucide-react'
 import { Donut, SeriesLines, useSeriesColor } from '../components/charts'
-import { AccountIcon } from '../components/common'
+import { AccountIcon, TxRow } from '../components/common'
 import { Badge, Button, Card, CardHeader, EmptyState, Money, PageHeader, Progress, Segmented, Stat } from '../components/ui'
 import { activeMonths, lastMonths, monthlyFlows, useDerived } from '../lib/calc'
 import { formatPct } from '../lib/currency'
-import { currentMonth, monthLabel, monthOf } from '../lib/dates'
+import { currentMonth, monthLabel, monthOf, relativeDay } from '../lib/dates'
 import { categoryMeta } from '../lib/meta'
+import type { Transaction } from '../lib/types'
 import { openModal } from '../lib/ui'
 
 type Period = 'month' | 'year' | '12m'
+type MoveKind = 'all' | 'income' | 'expense'
+
+const MOVES_STEP = 8
 
 export function Business() {
   const d = useDerived()
   const col = useSeriesColor()
   const [period, setPeriod] = useState<Period>('12m')
+  const [moveKind, setMoveKind] = useState<MoveKind>('all')
+  const [moveLimit, setMoveLimit] = useState(MOVES_STEP)
   const month = currentMonth()
   const months = useMemo(() => {
     if (period === 'month') return [month]
@@ -46,6 +52,15 @@ export function Business() {
     return [...m.entries()].map(([k, v]) => ({ key: k, label: categoryMeta(k).label, value: v, color: categoryMeta(k).color }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proTx.length, d])
+
+  // Historique : tout ce qui touche l'agence (mouvement pro ou compte pro), hors soldes vérifiés.
+  const isAgency = (t: Transaction) => t.scope === 'pro' || d.db.accounts[t.accountId]?.scope === 'pro' || (!!t.toAccountId && d.db.accounts[t.toAccountId]?.scope === 'pro')
+  const moves = d.transactions
+    .filter((t) => t.kind !== 'checkpoint' && monthSet.has(monthOf(t.date)) && isAgency(t))
+    .filter((t) => moveKind === 'all' || t.kind === moveKind)
+    .reverse()
+  const movesByDay = new Map<string, Transaction[]>()
+  for (const t of moves.slice(0, moveLimit)) movesByDay.set(t.date, [...(movesByDay.get(t.date) ?? []), t])
 
   const employees = Object.values(d.db.employees).sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
   const proAccounts = d.accounts.filter((s) => s.account.scope === 'pro' && !s.account.archived)
@@ -126,6 +141,50 @@ export function Business() {
           )}
         </Card>
       </div>
+
+      <Card className="p-5 sm:p-6 mb-6">
+        <CardHeader
+          title="Mouvements de l'agence"
+          icon={ArrowLeftRight}
+          subtitle={`${periodLabel} · ${moves.length} mouvement${moves.length > 1 ? 's' : ''}`}
+          action={
+            <Segmented
+              size="sm"
+              value={moveKind}
+              onChange={(v) => {
+                setMoveKind(v)
+                setMoveLimit(MOVES_STEP)
+              }}
+              options={[
+                { value: 'all', label: 'Tout' },
+                { value: 'income', label: 'Entrées' },
+                { value: 'expense', label: 'Sorties' },
+              ]}
+            />
+          }
+        />
+        {moves.length === 0 ? (
+          <EmptyState icon={ArrowLeftRight} title="Aucun mouvement" text="Rien sur cette période. Ajoute une facture encaissée ou une dépense pro." />
+        ) : (
+          <div className="-mx-3 space-y-3">
+            {[...movesByDay.entries()].map(([date, txs]) => (
+              <div key={date}>
+                <div className="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wider text-muted">{relativeDay(date)}</div>
+                {txs.map((t) => (
+                  <TxRow key={t.id} t={t} />
+                ))}
+              </div>
+            ))}
+            {moves.length > moveLimit && (
+              <div className="px-3 pt-1">
+                <Button size="sm" variant="soft" className="w-full" onClick={() => setMoveLimit(moveLimit + MOVES_STEP * 2)}>
+                  Voir plus ({moves.length - moveLimit} restant{moves.length - moveLimit > 1 ? 's' : ''})
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
 
       <div className="grid lg:grid-cols-3 gap-5 lg:gap-6">
         <Card className="p-5 sm:p-6 lg:col-span-2">

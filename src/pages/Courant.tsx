@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowDownLeft, CheckCircle2, CircleDashed, Pencil, Plus, ShoppingBag, TrendingDown, Wallet } from 'lucide-react'
-import { GroupedBars, SimpleLine } from '../components/charts'
+import { SeriesLines, SimpleLine } from '../components/charts'
 import { Badge, Button, Card, CardHeader, EmptyState, Money, PageHeader, Select, Stat, cx } from '../components/ui'
 import { courantMonths, lastMonths, useDerived, type CourantMonth } from '../lib/calc'
 import { formatMoney } from '../lib/currency'
@@ -173,7 +173,7 @@ export function Courant() {
       <div className="grid lg:grid-cols-5 gap-5 lg:gap-6 mb-6">
         <Card className="p-5 sm:p-6 lg:col-span-3">
           <CardHeader title="Approvisionné vs dépensé" subtitle="Dépensé = sorties notées + dépenses courantes" />
-          <GroupedBars
+          <SeriesLines
             data={months.map((m) => ({ label: monthLabel(m.month, 'short'), inflows: m.inflows, spent: (m.spent ?? 0) + m.outflows }))}
             series={[
               { key: 'inflows', label: 'Approvisionné', color: 'blue' },

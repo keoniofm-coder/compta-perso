@@ -13,7 +13,7 @@ import {
   Wallet,
   AlertCircle,
 } from 'lucide-react'
-import { Donut, GroupedBars, TrendArea, useSeriesColor } from '../components/charts'
+import { Donut, SeriesLines, TrendArea, useSeriesColor } from '../components/charts'
 import { AccountIcon, TxRow } from '../components/common'
 import { Badge, Button, Card, CardHeader, Delta, EmptyState, Money, Progress, Stat, cx } from '../components/ui'
 import { activeMonths, courantMonths, monthlyFlows, netWorthHistory, occurrences, useDerived } from '../lib/calc'
@@ -216,7 +216,7 @@ export function Dashboard() {
       <div className="grid lg:grid-cols-3 gap-5 lg:gap-6">
         <Card className="p-5 sm:p-6 lg:col-span-2">
           <CardHeader title="Entrées & sorties" subtitle="12 derniers mois, perso + pro, dépenses courantes incluses" action={<Button size="sm" variant="ghost" onClick={() => navigate('/mouvements')}>Détail <ArrowRight className="size-3.5" /></Button>} />
-          <GroupedBars
+          <SeriesLines
             data={flows.map((f) => ({ label: monthLabel(f.month, 'short'), income: f.income, expense: f.expense, net: f.net }))}
             series={[
               { key: 'income', label: 'Entrées', color: 'aqua' },

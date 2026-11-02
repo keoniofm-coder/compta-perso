@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, BriefcaseBusiness, CheckCircle2, Clock, Percent, Plus, Receipt, Users } from 'lucide-react'
-import { Donut, GroupedBars, useSeriesColor } from '../components/charts'
+import { Donut, SeriesLines, useSeriesColor } from '../components/charts'
 import { AccountIcon } from '../components/common'
 import { Badge, Button, Card, CardHeader, EmptyState, Money, PageHeader, Progress, Segmented, Stat } from '../components/ui'
 import { activeMonths, lastMonths, monthlyFlows, useDerived } from '../lib/calc'
@@ -86,7 +86,7 @@ export function Business() {
       <div className="grid lg:grid-cols-3 gap-5 lg:gap-6 mb-6">
         <Card className="p-5 sm:p-6 lg:col-span-2">
           <CardHeader title="Activité mensuelle" subtitle="12 derniers mois" />
-          <GroupedBars
+          <SeriesLines
             data={flows.map((f) => {
               const sal = f.byCategory.salaires_employes ?? 0
               return { label: monthLabel(f.month, 'short'), ca: f.income, salaires: sal, charges: f.expense - sal, net: f.net }

@@ -223,6 +223,82 @@ export function GroupedBars({
   )
 }
 
+/* ---------------- Courbes multiples ---------------- */
+
+export function SeriesLines({
+  data,
+  series,
+  currency,
+  height = 260,
+  labelKey = 'label',
+  footer,
+}: {
+  data: Record<string, number | string>[]
+  series: BarSeries[]
+  currency: string
+  height?: number
+  labelKey?: string
+  footer?: (row: Record<string, number | string>) => ReactNode
+}) {
+  const col = useSeriesColor()
+  const chrome = useChrome()
+  const gid = useId().replace(/:/g, '')
+  return (
+    <div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3">
+        {series.map((s) => (
+          <span key={s.key} className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-2">
+            <span className="h-[3px] w-3.5 rounded-full" style={{ background: col(s.color) }} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+      <ResponsiveContainer width="100%" height={height}>
+        <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <defs>
+            {series.map((s) => (
+              <linearGradient key={s.key} id={`${gid}-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={col(s.color)} stopOpacity={0.16} />
+                <stop offset="100%" stopColor={col(s.color)} stopOpacity={0} />
+              </linearGradient>
+            ))}
+          </defs>
+          <CartesianGrid vertical={false} stroke={chrome.grid} />
+          <XAxis dataKey={labelKey} tickLine={false} axisLine={false} tick={{ fill: chrome.axis, fontSize: 11.5 }} interval="preserveStartEnd" minTickGap={8} padding={{ left: 8, right: 8 }} />
+          <YAxis tickLine={false} axisLine={false} width={62} tick={{ fill: chrome.axis, fontSize: 11.5 }} tickFormatter={compactFmt(currency)} />
+          <Tooltip
+            cursor={{ stroke: chrome.axis, strokeDasharray: '3 3' }}
+            content={({ active, payload }) =>
+              active && payload?.length ? (
+                <TipCard
+                  title={String(payload[0].payload[labelKey])}
+                  currency={currency}
+                  rows={series.map((s) => ({ label: s.label, value: Number(payload[0].payload[s.key] ?? 0), color: col(s.color) }))}
+                  footer={footer?.(payload[0].payload)}
+                />
+              ) : null
+            }
+          />
+          {series.map((s) => (
+            <Area
+              key={s.key}
+              type="monotone"
+              dataKey={s.key}
+              name={s.label}
+              stroke={col(s.color)}
+              strokeWidth={2.25}
+              fill={`url(#${gid}-${s.key})`}
+              dot={{ r: 3.5, strokeWidth: 2, stroke: chrome.surface, fill: col(s.color) }}
+              activeDot={{ r: 5.5, stroke: chrome.surface, strokeWidth: 2 }}
+              animationDuration={700}
+            />
+          ))}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 /* ---------------- Ligne simple ---------------- */
 
 export function SimpleLine({

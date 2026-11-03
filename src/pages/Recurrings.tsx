@@ -3,11 +3,11 @@ import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CalendarClock, CheckCheck,
 import { SegmentBar } from '../components/charts'
 import { txVisual } from '../components/common'
 import { Badge, Button, Card, CardHeader, EmptyState, IconChip, Money, MonthPicker, PageHeader, Progress, Stat, cx } from '../components/ui'
-import { monthlyEquivalent, occurrences, recurringTotals, useDerived, type Occurrence } from '../lib/calc'
-import { currentMonth, dateLabel, dayInMonth } from '../lib/dates'
+import { monthlyEquivalent, occurrences, recurringTotals, recurringTx, useDerived, type Occurrence } from '../lib/calc'
+import { currentMonth, dateLabel } from '../lib/dates'
 import { FREQUENCIES, categoryMeta } from '../lib/meta'
 import { uid, useData } from '../lib/store'
-import type { Recurring, Transaction } from '../lib/types'
+import type { Recurring } from '../lib/types'
 import { confirm, openModal, toast } from '../lib/ui'
 
 function recVisual(r: Recurring) {
@@ -39,7 +39,7 @@ function OccRow({ o }: { o: Occurrence }) {
         <IconChip icon={v.icon} color={v.color} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-ink truncate">{r.label}</div>
-          <div className="text-xs text-muted truncate">{to ? `${acc?.name} → ${to.name}` : acc?.name}{r.scope === 'pro' ? ' · pro' : ''}</div>
+          <div className="text-xs text-muted truncate">{to ? `${acc?.name} → ${to.name}` : acc?.name}{r.scope === 'pro' ? ' · pro' : ''}{r.auto ? ' · automatique' : ''}</div>
         </div>
         <Money value={sign * amount || amount} currency={acc?.currency ?? d.base} sign={sign !== 0} colored={sign !== 0} className="text-sm font-semibold hidden sm:inline" />
       </button>
@@ -48,7 +48,15 @@ function OccRow({ o }: { o: Occurrence }) {
           type="button"
           title="Annuler la validation"
           onClick={async () => {
-            if (await confirm({ title: 'Annuler la validation ?', message: 'Le mouvement créé sera supprimé.', confirmLabel: 'Annuler la validation' })) useData.getState().remove('transactions', o.tx!.id)
+            const ok = await confirm({
+              title: 'Annuler la validation ?',
+              message: r.auto ? 'Le mouvement créé sera supprimé et ce mois ne sera plus validé automatiquement.' : 'Le mouvement créé sera supprimé.',
+              confirmLabel: 'Annuler la validation',
+            })
+            if (!ok) return
+            // On note le mois d'abord, sinon la validation automatique le recréerait aussitôt.
+            if (r.auto) useData.getState().put('recurrings', { ...r, skipped: Array.from(new Set([...(r.skipped ?? []), o.month])) })
+            useData.getState().remove('transactions', o.tx!.id)
           }}
           className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 px-2.5 h-8 text-xs font-semibold group"
         >
@@ -56,6 +64,11 @@ function OccRow({ o }: { o: Occurrence }) {
           <Undo2 className="size-3.5 hidden group-hover:block" />
           Validé
         </button>
+      ) : r.auto && o.status === 'upcoming' ? (
+        <span title="Validé automatiquement à sa date" className="inline-flex items-center gap-1 rounded-full bg-indigo-500/12 text-indigo-600 dark:text-indigo-300 px-2.5 h-8 text-xs font-semibold">
+          <Repeat className="size-3.5" />
+          Auto
+        </span>
       ) : (
         <Button size="sm" variant={o.status === 'late' ? 'primary' : 'secondary'} onClick={() => openModal({ type: 'validate', recurringId: r.id, month: o.month })}>
           Valider
@@ -78,6 +91,7 @@ function RecRow({ r }: { r: Recurring }) {
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-ink truncate">{r.label}</span>
           {!r.active && <Badge>En pause</Badge>}
+          {r.active && r.auto && <Badge tone="brand">Auto</Badge>}
         </div>
         <div className="text-xs text-muted truncate">
           {FREQUENCIES[r.frequency].label} · le {r.day} · {to ? `${acc?.name} → ${to.name}` : acc?.name}
@@ -115,29 +129,7 @@ export function Recurrings() {
     })
     if (!ok) return
     const now = Date.now()
-    const items = list.map((o, i) => {
-      const r = o.recurring
-      const acc = d.db.accounts[r.accountId]
-      const to = r.toAccountId ? d.db.accounts[r.toAccountId] : undefined
-      const tx: Transaction = {
-        id: uid(),
-        kind: r.kind,
-        date: dayInMonth(o.month, r.day),
-        amount: r.amount,
-        accountId: r.accountId,
-        toAccountId: r.toAccountId,
-        toAmount: to && acc && to.currency !== acc.currency ? d.convert(r.amount, acc.currency, to.currency) : undefined,
-        label: r.label,
-        category: r.category,
-        counterparty: r.counterparty,
-        employeeId: r.employeeId,
-        scope: r.scope,
-        recurringId: r.id,
-        recurringPeriod: o.month,
-        createdAt: now + i,
-      }
-      return { collection: 'transactions' as const, item: tx }
-    })
+    const items = list.map((o, i) => ({ collection: 'transactions' as const, item: recurringTx(d.db, d.convert, o.recurring, o.month, now + i, uid()) }))
     useData.getState().putMany(items)
     toast(`${items.length} échéance${items.length > 1 ? 's' : ''} validée${items.length > 1 ? 's' : ''}`)
   }

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { makeConverter, useRates, type Converter } from './currency'
 import { addMonths, currentMonth, dayInMonth, lastDayOf, monthDiff, monthOf, monthRange, today, yearsBetween } from './dates'
 import { FREQUENCIES } from './meta'
-import { useData, useSettings } from './store'
+import { stableUuid, useData, useSettings } from './store'
 import type { Account, Asset, DB, Holding, HoldingOp, Liability, Recurring, Transaction } from './types'
 
 export interface CashEvent {
@@ -564,6 +564,49 @@ export function occurrences(d: Derived, month: string): Occurrence[] {
     out.push({ recurring: r, month, date, tx, status: tx ? 'done' : date < todayStr ? 'late' : 'upcoming' })
   }
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.recurring.label.localeCompare(b.recurring.label)))
+}
+
+/** Mouvement créé quand on valide une échéance (à la main ou automatiquement). */
+export function recurringTx(db: DB, convert: Converter, r: Recurring, month: string, createdAt: number, id?: string): Transaction {
+  const acc = db.accounts[r.accountId]
+  const to = r.toAccountId ? db.accounts[r.toAccountId] : undefined
+  return {
+    id: id ?? stableUuid(`${r.id}:${month}:${createdAt}`),
+    kind: r.kind,
+    date: dayInMonth(month, r.day),
+    amount: r.amount,
+    accountId: r.accountId,
+    toAccountId: r.toAccountId,
+    toAmount: to && acc && to.currency !== acc.currency ? convert(r.amount, acc.currency, to.currency) : undefined,
+    label: r.label,
+    category: r.category,
+    counterparty: r.counterparty,
+    employeeId: r.employeeId,
+    scope: r.scope,
+    recurringId: r.id,
+    recurringPeriod: month,
+    createdAt,
+  }
+}
+
+/** Échéances automatiques arrivées à date et pas encore validées. */
+export function dueAutoTransactions(db: DB, convert: Converter): Transaction[] {
+  const todayStr = today()
+  const cur = currentMonth()
+  const validated = new Set<string>()
+  for (const t of Object.values(db.transactions)) if (t.recurringId && t.recurringPeriod) validated.add(`${t.recurringId}:${t.recurringPeriod}`)
+  const out: Transaction[] = []
+  const now = Date.now()
+  for (const r of Object.values(db.recurrings)) {
+    if (!r.auto || !r.active || !db.accounts[r.accountId]) continue
+    const from = [r.autoFrom ?? cur, r.startMonth].sort()[1]
+    for (const month of monthRange(from, cur)) {
+      if (!occursIn(r, month) || dayInMonth(month, r.day) > todayStr) continue
+      if (validated.has(`${r.id}:${month}`) || r.skipped?.includes(month)) continue
+      out.push(recurringTx(db, convert, r, month, now + out.length, stableUuid(`auto:${r.id}:${month}`)))
+    }
+  }
+  return out
 }
 
 export function monthlyEquivalent(d: Derived, r: Recurring) {

@@ -66,6 +66,11 @@ export interface Recurring {
   endMonth?: string
   scope: Scope
   active: boolean
+  /** Prélèvement / virement automatique : validé tout seul à sa date, à partir du mois `autoFrom`. */
+  auto?: boolean
+  autoFrom?: string
+  /** Mois dont la validation automatique a été annulée à la main. */
+  skipped?: string[]
   note?: string
   demo?: boolean
 }

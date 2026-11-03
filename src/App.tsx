@@ -4,10 +4,12 @@ import { Loader2 } from 'lucide-react'
 import { Layout } from './components/Layout'
 import { ModalHost } from './components/ModalHost'
 import { ConfirmHost, ToastHost } from './components/ui'
-import { registerCryptoIds, registerQuoteSymbols, setCustomCryptos, useRates } from './lib/currency'
+import { dueAutoTransactions } from './lib/calc'
+import { makeConverter, registerCryptoIds, registerQuoteSymbols, setCustomCryptos, useRates } from './lib/currency'
 import { setCustomCategories } from './lib/meta'
 import { LOCAL_USER, useData, useSettings } from './lib/store'
 import { supabase } from './lib/supabase'
+import { toast } from './lib/ui'
 import { AuthPage } from './pages/Auth'
 import { Onboarding } from './pages/Onboarding'
 
@@ -65,6 +67,9 @@ function Ready({ email, name }: { email: string; name: string }) {
   const settings = useSettings()
   const accounts = useData((s) => s.db.accounts)
   const holdings = useData((s) => s.db.holdings)
+  const recurrings = useData((s) => s.db.recurrings)
+  const transactions = useData((s) => s.db.transactions)
+  const [tick, setTick] = useState(0)
   const refresh = useRates((s) => s.refresh)
   const setOverrides = useRates((s) => s.setOverrides)
   const route = useRoute()
@@ -82,6 +87,19 @@ function Ready({ email, name }: { email: string; name: string }) {
     const t = setInterval(() => void refresh(), 15 * 60 * 1000)
     return () => clearInterval(t)
   }, [holdings, refresh])
+
+  // Prélèvements / virements automatiques : on crée les mouvements arrivés à date.
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 30 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
+  useEffect(() => {
+    const { rates, overrides } = useRates.getState()
+    const due = dueAutoTransactions(useData.getState().db, makeConverter(rates, overrides, settings.baseCurrency))
+    if (!due.length) return
+    useData.getState().putMany(due.map((item) => ({ collection: 'transactions' as const, item })))
+    toast(due.length === 1 ? `Échéance automatique validée : ${due[0].label}` : `${due.length} échéances automatiques validées`)
+  }, [recurrings, transactions, tick, settings.baseCurrency])
 
   const needsOnboarding = !settings.onboarded && Object.keys(accounts).length === 0
   return (

@@ -30,6 +30,7 @@ export function RecurringForm({ onClose, id, preset }: { onClose: () => void; id
   const [counterparty, setCounterparty] = useState(existing?.counterparty ?? p.counterparty ?? '')
   const [employeeId, setEmployeeId] = useState(existing?.employeeId ?? p.employeeId ?? '')
   const [active, setActive] = useState(existing?.active ?? true)
+  const [auto, setAuto] = useState(!!existing?.auto)
   const [error, setError] = useState('')
 
   const acc = d.db.accounts[accountId]
@@ -59,6 +60,10 @@ export function RecurringForm({ onClose, id, preset }: { onClose: () => void; id
       endMonth: endMonth || undefined,
       scope,
       active,
+      auto: auto || undefined,
+      // Les mois passés restent à valider à la main : l'automatique part du mois où on l'active.
+      autoFrom: auto ? (existing?.auto && existing.autoFrom ? existing.autoFrom : currentMonth()) : undefined,
+      skipped: auto ? existing?.skipped : undefined,
     }
     useData.getState().put('recurrings', rec)
     toast(existing ? 'Flux fixe mis à jour' : 'Flux fixe ajouté')
@@ -188,6 +193,12 @@ export function RecurringForm({ onClose, id, preset }: { onClose: () => void; id
           </div>
         )}
 
+        <Switch
+          checked={auto}
+          onChange={setAuto}
+          label={kind === 'income' ? 'Versement automatique' : kind === 'transfer' ? 'Virement automatique' : 'Prélèvement automatique'}
+          hint="Validé tout seul à sa date chaque mois, tu n'as rien à cocher. Tu peux toujours le modifier ou l'annuler."
+        />
         <Switch checked={active} onChange={setActive} label="Actif" hint="Désactive-le pour le mettre en pause sans le supprimer." />
         {error && <div className="text-sm font-medium text-neg">{error}</div>}
       </div>

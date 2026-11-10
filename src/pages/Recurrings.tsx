@@ -3,7 +3,7 @@ import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CalendarClock, CheckCheck,
 import { SegmentBar } from '../components/charts'
 import { txVisual } from '../components/common'
 import { Badge, Button, Card, CardHeader, EmptyState, IconChip, Money, MonthPicker, PageHeader, Progress, Stat, cx } from '../components/ui'
-import { monthlyEquivalent, occurrences, recurringTotals, recurringTx, useDerived, type Occurrence } from '../lib/calc'
+import { expectedAmount, monthlyEquivalent, occurrences, recurringTotals, recurringTx, useDerived, type Occurrence } from '../lib/calc'
 import { currentMonth, dateLabel } from '../lib/dates'
 import { FREQUENCIES, categoryMeta } from '../lib/meta'
 import { uid, useData } from '../lib/store'
@@ -22,7 +22,8 @@ function OccRow({ o }: { o: Occurrence }) {
   const acc = d.db.accounts[r.accountId]
   const to = r.toAccountId ? d.db.accounts[r.toAccountId] : undefined
   const v = o.tx ? txVisual(o.tx) : recVisual(r)
-  const amount = o.tx?.amount ?? r.amount
+  const amount = o.tx?.amount ?? expectedAmount(d.db, r)
+  const approx = !o.tx && r.variable
   const sign = r.kind === 'income' ? 1 : r.kind === 'expense' ? -1 : 0
   return (
     <div className="flex items-center gap-3 pr-3 rounded-xl transition-colors hover:bg-surface-2">
@@ -41,7 +42,10 @@ function OccRow({ o }: { o: Occurrence }) {
           <div className="text-sm font-medium text-ink truncate">{r.label}</div>
           <div className="text-xs text-muted truncate">{to ? `${acc?.name} → ${to.name}` : acc?.name}{r.scope === 'pro' ? ' · pro' : ''}{r.auto ? ' · automatique' : ''}</div>
         </div>
-        <Money value={sign * amount || amount} currency={acc?.currency ?? d.base} sign={sign !== 0} colored={sign !== 0} className="text-sm font-semibold hidden sm:inline" />
+        <span className={cx('text-sm font-semibold hidden sm:inline whitespace-nowrap', approx && 'opacity-70')} title={approx ? 'Montant estimé : saisis le montant exact en validant' : undefined}>
+          {approx && <span className="text-muted mr-0.5">≈</span>}
+          <Money value={sign * amount || amount} currency={acc?.currency ?? d.base} sign={sign !== 0} colored={sign !== 0} />
+        </span>
       </button>
       {o.status === 'done' ? (
         <button
@@ -91,14 +95,18 @@ function RecRow({ r }: { r: Recurring }) {
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-ink truncate">{r.label}</span>
           {!r.active && <Badge>En pause</Badge>}
-          {r.active && r.auto && <Badge tone="brand">Auto</Badge>}
+          {r.active && r.auto && !r.variable && <Badge tone="brand">Auto</Badge>}
+          {r.active && r.variable && <Badge tone="info">Variable</Badge>}
         </div>
         <div className="text-xs text-muted truncate">
           {FREQUENCIES[r.frequency].label} · le {r.day} · {to ? `${acc?.name} → ${to.name}` : acc?.name}
         </div>
       </div>
       <div className="text-right">
-        <Money value={sign ? sign * r.amount : r.amount} currency={acc?.currency ?? d.base} sign={!!sign} colored={!!sign} className="text-sm font-semibold" />
+        <span className="text-sm font-semibold whitespace-nowrap">
+          {r.variable && <span className="text-muted mr-0.5">≈</span>}
+          <Money value={sign ? sign * expectedAmount(d.db, r) : expectedAmount(d.db, r)} currency={acc?.currency ?? d.base} sign={!!sign} colored={!!sign} />
+        </span>
         {r.frequency !== 'monthly' && (
           <div className="text-[11.5px] text-muted">
             ≈ <Money value={monthlyEquivalent(d, r)} currency={d.base} /> / mois
@@ -119,12 +127,15 @@ export function Recurrings() {
   const pending = occ.filter((o) => o.status !== 'done')
 
   const validateAll = async () => {
-    const targets = pending.filter((o) => o.status === 'late' || month < currentMonth())
-    const list = targets.length ? targets : pending
-    if (!list.length) return
+    // Les montants variables se saisissent un par un : on ne valide pas une estimation.
+    const fixed = pending.filter((o) => !o.recurring.variable)
+    const skippedVariable = pending.length - fixed.length
+    const targets = fixed.filter((o) => o.status === 'late' || month < currentMonth())
+    const list = targets.length ? targets : fixed
+    if (!list.length) return toast('Les échéances restantes ont un montant variable : valide-les une par une avec le montant exact.')
     const ok = await confirm({
       title: `Valider ${list.length} échéance${list.length > 1 ? 's' : ''} ?`,
-      message: 'Les mouvements seront créés avec les montants prévus. Tu pourras les modifier ensuite.',
+      message: `Les mouvements seront créés avec les montants prévus. Tu pourras les modifier ensuite.${skippedVariable ? ` Les montants variables (${skippedVariable}) restent à saisir un par un.` : ''}`,
       confirmLabel: 'Tout valider',
     })
     if (!ok) return

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CheckCircle2, Trash2 } from 'lucide-react'
 import { AccountSelect } from '../components/common'
 import { AmountInput, Button, Field, Input, Modal, Segmented, Select, Switch } from '../components/ui'
-import { useDerived } from '../lib/calc'
+import { expectedAmount, recurringHistory, useDerived } from '../lib/calc'
 import { formatMoney, parseAmount } from '../lib/currency'
 import { currentMonth, dayInMonth, monthLabel } from '../lib/dates'
 import { FREQUENCIES, categoryMeta } from '../lib/meta'
@@ -31,6 +31,7 @@ export function RecurringForm({ onClose, id, preset }: { onClose: () => void; id
   const [employeeId, setEmployeeId] = useState(existing?.employeeId ?? p.employeeId ?? '')
   const [active, setActive] = useState(existing?.active ?? true)
   const [auto, setAuto] = useState(!!existing?.auto)
+  const [variable, setVariable] = useState(!!existing?.variable)
   const [error, setError] = useState('')
 
   const acc = d.db.accounts[accountId]
@@ -60,7 +61,8 @@ export function RecurringForm({ onClose, id, preset }: { onClose: () => void; id
       endMonth: endMonth || undefined,
       scope,
       active,
-      auto: auto || undefined,
+      variable: (kind !== 'transfer' && variable) || undefined,
+      auto: (auto && !(kind !== 'transfer' && variable)) || undefined,
       // Les mois passés restent à valider à la main : l'automatique part du mois où on l'active.
       autoFrom: auto ? (existing?.auto && existing.autoFrom ? existing.autoFrom : currentMonth()) : undefined,
       skipped: auto ? existing?.skipped : undefined,
@@ -114,7 +116,7 @@ export function RecurringForm({ onClose, id, preset }: { onClose: () => void; id
           <Field label="Libellé">
             <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={kind === 'income' ? 'Salaire' : kind === 'expense' ? 'Loyer' : 'Épargne Livret A'} />
           </Field>
-          <Field label="Montant">
+          <Field label={variable ? 'Montant estimé' : 'Montant'}>
             <AmountInput value={amount} onChange={setAmount} currency={acc ? ccy(acc.currency) : ''} />
             {acc && <div className="mt-1"><ConvertHint amount={parseAmount(amount)} from={acc.currency} /></div>}
           </Field>
@@ -193,12 +195,31 @@ export function RecurringForm({ onClose, id, preset }: { onClose: () => void; id
           </div>
         )}
 
+        {kind !== 'transfer' && (
+          <Switch
+            checked={variable}
+            onChange={setVariable}
+            label="Montant variable"
+            hint={
+              kind === 'income'
+                ? "Pour un salaire qui dépend de ton CA. Le montant ci-dessus sert d'estimation, puis l'app prend la moyenne de tes 3 derniers mois validés. Tu saisis le montant exact quand tu es payé."
+                : "Pour une facture qui change chaque mois. Le montant ci-dessus sert d'estimation, puis l'app prend la moyenne de tes 3 derniers mois validés."
+            }
+          />
+        )}
+        {existing?.variable && variable && expectedAmount(d.db, existing) !== existing.amount && (
+          <p className="-mt-2 text-xs text-muted">
+            Estimation actuelle : <b className="text-ink">≈ {formatMoney(expectedAmount(d.db, existing), acc?.currency ?? d.base)}</b> (moyenne de {recurringHistory(d.db, existing).length} mois)
+          </p>
+        )}
+        {!(kind !== 'transfer' && variable) && (
         <Switch
           checked={auto}
           onChange={setAuto}
           label={kind === 'income' ? 'Versement automatique' : kind === 'transfer' ? 'Virement automatique' : 'Prélèvement automatique'}
           hint="Validé tout seul à sa date chaque mois, tu n'as rien à cocher. Tu peux toujours le modifier ou l'annuler."
         />
+        )}
         <Switch checked={active} onChange={setActive} label="Actif" hint="Désactive-le pour le mettre en pause sans le supprimer." />
         {error && <div className="text-sm font-medium text-neg">{error}</div>}
       </div>
@@ -210,15 +231,19 @@ export function RecurringForm({ onClose, id, preset }: { onClose: () => void; id
 export function ValidateForm({ onClose, recurringId, month }: { onClose: () => void; recurringId: string; month: string }) {
   const d = useDerived()
   const r = d.db.recurrings[recurringId]
-  const [amount, setAmount] = useState(r ? String(r.amount).replace('.', ',') : '')
+  const estimate = r ? expectedAmount(d.db, r) : 0
+  // Montant variable : champ vide pour saisir le montant exact, l'estimation reste visible en indice.
+  const [amount, setAmount] = useState(r && !r.variable ? String(r.amount).replace('.', ',') : '')
   const [date, setDate] = useState(r ? dayInMonth(month, r.day) : '')
+  const [error, setError] = useState('')
   if (!r) return null
+  const history = r.variable ? recurringHistory(d.db, r) : []
   const acc = d.db.accounts[r.accountId]
   const to = r.toAccountId ? d.db.accounts[r.toAccountId] : undefined
 
   const save = () => {
     const amt = parseAmount(amount)
-    if (!(amt > 0)) return
+    if (!(amt > 0)) return setError(r.variable ? 'Indique le montant exact reçu' : 'Indique un montant')
     const tx: Transaction = {
       id: uid(),
       kind: r.kind,
@@ -256,12 +281,30 @@ export function ValidateForm({ onClose, recurringId, month }: { onClose: () => v
       }
     >
       <div className="space-y-4">
-        <Field label="Montant réel" hint={`Prévu : ${formatMoney(r.amount, acc?.currency ?? d.base)}`}>
-          <AmountInput big autoFocus value={amount} onChange={setAmount} currency={acc ? ccy(acc.currency) : ''} />
+        <Field
+          label={r.variable ? (r.kind === 'income' ? 'Montant exact reçu' : 'Montant exact payé') : 'Montant réel'}
+          hint={r.variable ? `Estimation : ≈ ${formatMoney(estimate, acc?.currency ?? d.base)}${history.length ? ` (moyenne de ${history.length} mois)` : ''}` : `Prévu : ${formatMoney(r.amount, acc?.currency ?? d.base)}`}
+        >
+          <AmountInput big autoFocus value={amount} onChange={setAmount} currency={acc ? ccy(acc.currency) : ''} placeholder={r.variable ? `≈ ${String(Math.round(estimate * 100) / 100).replace('.', ',')}` : undefined} />
         </Field>
+        {history.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 -mt-1">
+            {history.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setAmount(String(t.amount).replace('.', ','))}
+                className="h-8 px-3 rounded-full border border-line-strong text-[12.5px] text-ink-2 hover:text-ink hover:border-indigo-400"
+              >
+                {monthLabel(t.recurringPeriod!, 'short')} : <b className="text-ink">{formatMoney(t.amount, acc?.currency ?? d.base)}</b>
+              </button>
+            ))}
+          </div>
+        )}
         <Field label="Date">
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
+        {error && <div className="text-sm font-medium text-neg">{error}</div>}
       </div>
     </Modal>
   )

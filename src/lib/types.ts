@@ -66,6 +66,8 @@ export interface Recurring {
   endMonth?: string
   scope: Scope
   active: boolean
+  /** Montant variable (salaire selon le CA, facture qui change) : `amount` sert d'estimation de départ. */
+  variable?: boolean
   /** Prélèvement / virement automatique : validé tout seul à sa date, à partir du mois `autoFrom`. */
   auto?: boolean
   autoFrom?: string

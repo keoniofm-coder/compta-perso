@@ -566,18 +566,34 @@ export function occurrences(d: Derived, month: string): Occurrence[] {
   return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.recurring.label.localeCompare(b.recurring.label)))
 }
 
+/** Derniers montants réellement validés pour un flux fixe, du plus récent au plus ancien. */
+export function recurringHistory(db: DB, r: Recurring, n = 3) {
+  return Object.values(db.transactions)
+    .filter((t) => t.recurringId === r.id && t.recurringPeriod)
+    .sort((a, b) => (a.recurringPeriod! < b.recurringPeriod! ? 1 : -1))
+    .slice(0, n)
+}
+
+/** Montant attendu : le montant saisi, ou pour un montant variable la moyenne des 3 derniers mois validés. */
+export function expectedAmount(db: DB, r: Recurring) {
+  if (!r.variable) return r.amount
+  const last = recurringHistory(db, r)
+  return last.length ? last.reduce((s, t) => s + t.amount, 0) / last.length : r.amount
+}
+
 /** Mouvement créé quand on valide une échéance (à la main ou automatiquement). */
 export function recurringTx(db: DB, convert: Converter, r: Recurring, month: string, createdAt: number, id?: string): Transaction {
   const acc = db.accounts[r.accountId]
   const to = r.toAccountId ? db.accounts[r.toAccountId] : undefined
+  const amount = expectedAmount(db, r)
   return {
     id: id ?? stableUuid(`${r.id}:${month}:${createdAt}`),
     kind: r.kind,
     date: dayInMonth(month, r.day),
-    amount: r.amount,
+    amount,
     accountId: r.accountId,
     toAccountId: r.toAccountId,
-    toAmount: to && acc && to.currency !== acc.currency ? convert(r.amount, acc.currency, to.currency) : undefined,
+    toAmount: to && acc && to.currency !== acc.currency ? convert(amount, acc.currency, to.currency) : undefined,
     label: r.label,
     category: r.category,
     counterparty: r.counterparty,
@@ -598,7 +614,7 @@ export function dueAutoTransactions(db: DB, convert: Converter): Transaction[] {
   const out: Transaction[] = []
   const now = Date.now()
   for (const r of Object.values(db.recurrings)) {
-    if (!r.auto || !r.active || !db.accounts[r.accountId]) continue
+    if (!r.auto || r.variable || !r.active || !db.accounts[r.accountId]) continue
     const from = [r.autoFrom ?? cur, r.startMonth].sort()[1]
     for (const month of monthRange(from, cur)) {
       if (!occursIn(r, month) || dayInMonth(month, r.day) > todayStr) continue
@@ -611,7 +627,7 @@ export function dueAutoTransactions(db: DB, convert: Converter): Transaction[] {
 
 export function monthlyEquivalent(d: Derived, r: Recurring) {
   const acc = d.db.accounts[r.accountId]
-  return d.convert((r.amount * FREQUENCIES[r.frequency].perYear) / 12, acc?.currency ?? d.base)
+  return d.convert((expectedAmount(d.db, r) * FREQUENCIES[r.frequency].perYear) / 12, acc?.currency ?? d.base)
 }
 
 export function recurringTotals(d: Derived, scope?: 'perso' | 'pro') {

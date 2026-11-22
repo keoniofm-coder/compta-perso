@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Inbox, Search, Split } from 'lucide-react'
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Check, Hourglass, Inbox, Plus, Search, Split } from 'lucide-react'
 import { Donut } from '../components/charts'
 import { AccountSelect, TxRow } from '../components/common'
 import { Button, Card, CardHeader, EmptyState, Input, Money, MonthPicker, PageHeader, Segmented, Stat, cx } from '../components/ui'
 import { monthlyFlows, useDerived } from '../lib/calc'
-import { currentMonth, monthOf, relativeDay } from '../lib/dates'
+import { currentMonth, dateLabel, monthOf, relativeDay, today } from '../lib/dates'
 import { categoryMeta } from '../lib/meta'
 import type { Transaction } from '../lib/types'
-import { openModal } from '../lib/ui'
+import { useData } from '../lib/store'
+import { openModal, toast } from '../lib/ui'
 import { useAllAccounts } from '../forms/shared'
 
 type KindFilter = 'all' | 'income' | 'expense' | 'transfer'
@@ -48,6 +49,17 @@ export function Movements() {
     for (const t of list.slice(0, 400)) map.set(t.date, [...(map.get(t.date) ?? []), t])
     return [...map.entries()]
   }, [list])
+
+  const pending = useMemo(
+    () => d.pending.filter((t) => scope === 'all' || t.scope === scope).filter((t) => !accountId || t.accountId === accountId),
+    [d, scope, accountId],
+  )
+  const owedToMe = pending.filter((t) => t.kind === 'income').reduce((s, t) => s + d.convert(t.amount, d.db.accounts[t.accountId]?.currency ?? d.base, d.base), 0)
+  const iOwe = pending.filter((t) => t.kind === 'expense').reduce((s, t) => s + d.convert(t.amount, d.db.accounts[t.accountId]?.currency ?? d.base, d.base), 0)
+  const settle = (t: Transaction) => {
+    useData.getState().put('transactions', { ...t, pending: undefined, date: today() })
+    toast(t.kind === 'income' ? 'Marqué comme reçu' : 'Marqué comme payé')
+  }
 
   const expenseSlices = Object.entries(flow.byCategory).map(([k, v]) => {
     const m = categoryMeta(k)
@@ -115,6 +127,33 @@ export function Movements() {
           {accountId && <Button variant="ghost" onClick={() => setAccountId('')}>Tous</Button>}
         </div>
       </div>
+
+      {pending.length > 0 && (
+        <Card className="p-3 sm:p-4 mb-5 border-amber-400/50">
+          <div className="flex items-center gap-3 px-3 pt-1 pb-2 flex-wrap">
+            <Hourglass className="size-4 text-amber-500" />
+            <span className="font-semibold text-ink">En attente</span>
+            <span className="text-[13px] text-muted">
+              {owedToMe > 0 && <>On te doit <Money value={owedToMe} currency={d.base} className="font-semibold text-pos" /></>}
+              {owedToMe > 0 && iOwe > 0 && ' · '}
+              {iOwe > 0 && <>Tu dois <Money value={iOwe} currency={d.base} className="font-semibold text-neg" /></>}
+            </span>
+            <Button size="sm" variant="ghost" icon={Plus} className="ml-auto" onClick={() => openModal({ type: 'tx', kind: 'income', preset: { kind: 'income', pending: true } })}>
+              On me doit…
+            </Button>
+          </div>
+          {pending.map((t) => (
+            <div key={t.id} className="flex items-center gap-1">
+              <div className="min-w-0 flex-1">
+                <TxRow t={t} contextAccountId={accountId || undefined} showDate />
+              </div>
+              <Button size="sm" variant="soft" icon={Check} onClick={() => settle(t)} title={`Valider à la date du jour (${dateLabel(today(), { day: 'numeric', month: 'short' })})`}>
+                {t.kind === 'income' ? 'Reçu' : 'Payé'}
+              </Button>
+            </div>
+          ))}
+        </Card>
+      )}
 
       {!allTime && (
         <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6">

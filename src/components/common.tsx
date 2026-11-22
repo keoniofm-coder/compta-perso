@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Repeat, Scale, ShoppingBag } from 'lucide-react'
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Hourglass, Repeat, Scale, ShoppingBag } from 'lucide-react'
 import { useDerived } from '../lib/calc'
 import { currencyDef } from '../lib/currency'
 import { dateLabel } from '../lib/dates'
@@ -113,6 +113,12 @@ export function TxRow({ t, contextAccountId, showDate = false }: { t: Transactio
           <span className="font-medium text-[14px] text-ink truncate">{label}</span>
           {t.recurringId && <Repeat className="size-3.5 text-muted shrink-0" aria-label="Récurrent" />}
           {t.scope === 'pro' && <Badge tone="brand" className="!text-[10px] !px-1.5">PRO</Badge>}
+          {t.pending && (
+            <Badge tone="warn" className="!text-[10px] !px-1.5 gap-1">
+              <Hourglass className="size-3" />
+              EN ATTENTE
+            </Badge>
+          )}
         </div>
         <div className="text-[12.5px] text-muted truncate">{sub.join(' · ')}</div>
       </div>
@@ -122,7 +128,7 @@ export function TxRow({ t, contextAccountId, showDate = false }: { t: Transactio
           currency={currency}
           sign={!neutral}
           colored={!neutral}
-          className={cx('font-semibold text-[14.5px]', neutral && 'text-ink')}
+          className={cx('font-semibold text-[14.5px]', neutral && 'text-ink', t.pending && 'opacity-60')}
         />
         {t.kind === 'transfer' && t.toAmount != null && to && to.currency !== acc?.currency && !contextAccountId && (
           <div className="text-[11.5px] text-muted">

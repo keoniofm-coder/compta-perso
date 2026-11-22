@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Plus, Trash2, X } from 'lucide-react'
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Hourglass, Plus, Trash2, X } from 'lucide-react'
 import { AccountSelect } from '../components/common'
 import { AmountInput, Button, Field, Input, Modal, Segmented, Select, Switch, TextArea, cx } from '../components/ui'
 import { useDerived } from '../lib/calc'
@@ -55,6 +55,7 @@ export function TxForm({
   const [counterparty, setCounterparty] = useState(tx?.counterparty ?? '')
   const [employeeId, setEmployeeId] = useState(tx?.employeeId ?? '')
   const [note, setNote] = useState(tx?.note ?? '')
+  const [pending, setPending] = useState(!!(tx?.pending ?? preset?.pending))
   const [multi, setMulti] = useState(false)
   const [lines, setLines] = useState<{ accountId: string; amount: string }[]>([
     { accountId: accountId, amount: '' },
@@ -129,9 +130,10 @@ export function TxForm({
       label.trim() ||
       (kind === 'transfer' ? `Virement vers ${toAcc?.name ?? ''}`.trim() : categoryMeta(category || (kind === 'income' ? 'autre_entree' : 'autre_sortie')).label)
     const id = tx?.id ?? uid()
+    const isPending = kind !== 'transfer' && pending
     let recurringId = tx?.recurringId
     let recurringPeriod = tx?.recurringPeriod
-    if (makeRecurring && !editing) {
+    if (makeRecurring && !editing && !isPending) {
       const rec: Recurring = {
         id: uid(),
         kind,
@@ -170,6 +172,7 @@ export function TxForm({
       scope,
       recurringId,
       recurringPeriod,
+      pending: isPending || undefined,
       createdAt: tx?.createdAt ?? Date.now(),
     }
     if (addAsset && kind === 'expense' && !editing) {
@@ -178,7 +181,13 @@ export function TxForm({
     }
     put('transactions', next)
     rememberAccount(kind, accountId)
-    toast(editing ? 'Mouvement mis à jour' : kind === 'income' ? 'Entrée enregistrée' : kind === 'expense' ? 'Sortie enregistrée' : 'Virement enregistré')
+    toast(
+      tx?.pending && !isPending
+        ? kind === 'income' ? 'Marqué comme reçu' : 'Marqué comme payé'
+        : isPending
+          ? 'Somme en attente enregistrée : tu la retrouves dans Entrées & sorties'
+          : editing ? 'Mouvement mis à jour' : kind === 'income' ? 'Entrée enregistrée' : kind === 'expense' ? 'Sortie enregistrée' : 'Virement enregistré',
+    )
     onClose()
   }
 
@@ -315,10 +324,32 @@ export function TxForm({
           <Field label="Libellé">
             <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={kind === 'income' ? 'Ex. Salaire octobre' : kind === 'expense' ? 'Ex. MacBook Pro' : 'Ex. Épargne du mois'} />
           </Field>
-          <Field label="Date">
+          <Field label={kind !== 'transfer' && pending ? (kind === 'income' ? 'Attendue le' : 'À payer le') : 'Date'}>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
         </div>
+
+        {kind !== 'transfer' && !(kind === 'expense' && multi) && (
+          <div className={cx('rounded-2xl border p-4 transition-colors', pending ? 'border-amber-400/50 bg-amber-400/8' : 'border-line bg-surface-2')}>
+            <div className="flex items-start gap-3">
+              <span className={cx('size-9 rounded-xl flex items-center justify-center shrink-0', pending ? 'bg-amber-400/20 text-amber-600 dark:text-amber-300' : 'bg-surface-3 text-muted')}>
+                <Hourglass className="size-4" />
+              </span>
+              <div className="flex-1 min-w-0">
+                <Switch
+                  checked={pending}
+                  onChange={setPending}
+                  label={kind === 'income' ? 'En attente : on me doit cette somme' : 'En attente : je dois cette somme'}
+                  hint={
+                    kind === 'income'
+                      ? "Pas encore reçue : elle n'entre pas dans tes soldes. Tu la retrouves dans « En attente » et tu la marques reçue quand l'argent arrive."
+                      : "Pas encore payée : elle n'est pas déduite de tes soldes tant que tu ne la marques pas payée."
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {kind !== 'transfer' && (
           <>
@@ -378,7 +409,7 @@ export function TxForm({
           <TextArea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
 
-        {!editing && (
+        {!editing && !(kind !== 'transfer' && pending) && (
           <div className="rounded-2xl border border-line bg-surface-2 p-4 space-y-3">
             <Switch
               checked={makeRecurring}

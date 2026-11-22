@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CandlestickChart,
   CheckCircle2,
+  Hourglass,
   PiggyBank,
   Plus,
   Split,
@@ -16,7 +17,7 @@ import {
 import { Donut, SeriesLines, TrendArea, useSeriesColor } from '../components/charts'
 import { AccountIcon, TxRow } from '../components/common'
 import { Badge, Button, Card, CardHeader, Delta, EmptyState, Money, Progress, Stat, cx } from '../components/ui'
-import { activeMonths, courantMonths, monthlyFlows, netWorthHistory, occurrences, useDerived } from '../lib/calc'
+import { activeMonths, courantMonths, monthlyFlows, netWorthHistory, occurrences, pendingTotals, useDerived } from '../lib/calc'
 import { formatMoney, formatPct } from '../lib/currency'
 import { addMonths, currentMonth, monthLabel, monthShortYear, today } from '../lib/dates'
 import { ACCOUNT_TYPES } from '../lib/meta'
@@ -34,6 +35,7 @@ export function Dashboard() {
   const privacy = useUI((s) => s.privacy)
   const col = useSeriesColor()
   const base = d.base
+  const pendingSum = pendingTotals(d)
   const month = currentMonth()
 
   const history = useMemo(() => netWorthHistory(d, 12), [d])
@@ -94,6 +96,29 @@ export function Dashboard() {
           <Button variant="primary" icon={Plus} className="hidden sm:inline-flex" onClick={() => openModal({ type: 'tx', kind: 'expense' })}>Mouvement</Button>
         </div>
       </div>
+
+      {d.pending.length > 0 && (pendingSum.owedToMe > 0 || pendingSum.iOwe > 0) && (
+        <button
+          type="button"
+          onClick={() => navigate('/mouvements')}
+          className="anim-fade-up w-full text-left rounded-2xl border border-amber-400/40 bg-amber-400/8 p-4 flex items-center gap-3 hover:bg-amber-400/12 transition-colors"
+        >
+          <span className="size-10 rounded-xl bg-amber-400/20 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0">
+            <Hourglass className="size-5" />
+          </span>
+          <div className="text-sm flex-1 min-w-0">
+            <div className="font-semibold text-ink">
+              {d.pending.length} somme{d.pending.length > 1 ? 's' : ''} en attente
+            </div>
+            <div className="text-ink-2">
+              {pendingSum.owedToMe > 0 && <>On te doit <Money value={pendingSum.owedToMe} currency={base} className="font-semibold text-pos" /></>}
+              {pendingSum.owedToMe > 0 && pendingSum.iOwe > 0 && ' · '}
+              {pendingSum.iOwe > 0 && <>Tu dois <Money value={pendingSum.iOwe} currency={base} className="font-semibold text-neg" /></>}
+            </div>
+          </div>
+          <ArrowRight className="size-4 text-muted shrink-0" />
+        </button>
+      )}
 
       {unclosed.length > 0 && (
         <div className="anim-fade-up rounded-2xl border border-sky-500/30 bg-sky-500/8 p-4 flex flex-col sm:flex-row sm:items-center gap-3">

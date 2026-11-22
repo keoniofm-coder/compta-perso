@@ -43,6 +43,8 @@ export interface Transaction {
   recurringPeriod?: string
   groupId?: string
   assetId?: string
+  /** En attente : somme qu'on me doit (entrée) ou que je dois (sortie), pas encore comptée dans les soldes. */
+  pending?: boolean
   createdAt?: number
   demo?: boolean
 }

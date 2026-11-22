@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Inbox, Search, Split } from 'lucide-react'
 import { Donut } from '../components/charts'
 import { AccountSelect, TxRow } from '../components/common'
+import { PendingCard } from '../components/Pending'
 import { Button, Card, CardHeader, EmptyState, Input, Money, MonthPicker, PageHeader, Segmented, Stat, cx } from '../components/ui'
 import { monthlyFlows, useDerived } from '../lib/calc'
 import { currentMonth, monthOf, relativeDay } from '../lib/dates'
@@ -73,6 +74,8 @@ export function Movements() {
           </>
         }
       />
+
+      <PendingCard />
 
       <div className="flex flex-col xl:flex-row gap-3 mb-5">
         <div className="flex items-center gap-2">

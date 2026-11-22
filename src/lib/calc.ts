@@ -70,7 +70,10 @@ export interface Derived {
   holdingById: Map<string, HoldingStat>
   checkpointDelta: Map<string, number>
   totals: Totals
+  /** Mouvements réels (hors « en attente »), utilisés par tous les calculs. */
   transactions: Transaction[]
+  /** Sommes en attente : on me doit / je dois. */
+  pending: Transaction[]
   assetValue: (a: Asset, date?: string) => number
   liabilityRemainingAt: (l: Liability, date: string) => number
   balanceAt: (accountId: string, date: string) => number
@@ -148,7 +151,9 @@ export function replayHolding(holding: Holding, ops: HoldingOp[], until?: string
 export function computeDerived(db: DB, convert: Converter, base: string, liveRates: Record<string, number>): Derived {
   const todayStr = today()
   const accountsArr = Object.values(db.accounts)
-  const txs = Object.values(db.transactions).sort(byDateSeq)
+  const allTxs = Object.values(db.transactions).sort(byDateSeq)
+  const txs = allTxs.filter((t) => !t.pending)
+  const pending = allTxs.filter((t) => t.pending)
   const opsByHolding = new Map<string, HoldingOp[]>()
   for (const op of Object.values(db.ops)) {
     const list = opsByHolding.get(op.holdingId) ?? []
@@ -369,6 +374,7 @@ export function computeDerived(db: DB, convert: Converter, base: string, liveRat
     checkpointDelta,
     totals,
     transactions: txs,
+    pending,
     assetValue,
     liabilityRemainingAt,
     balanceAt,
@@ -569,7 +575,7 @@ export function occurrences(d: Derived, month: string): Occurrence[] {
 /** Derniers montants réellement validés pour un flux fixe, du plus récent au plus ancien. */
 export function recurringHistory(db: DB, r: Recurring, n = 3) {
   return Object.values(db.transactions)
-    .filter((t) => t.recurringId === r.id && t.recurringPeriod)
+    .filter((t) => t.recurringId === r.id && t.recurringPeriod && !t.pending)
     .sort((a, b) => (a.recurringPeriod! < b.recurringPeriod! ? 1 : -1))
     .slice(0, n)
 }
@@ -655,4 +661,16 @@ export function activeMonths(d: Derived, n: number) {
   const first = firstDataMonth(d)
   const list = lastMonths(n).filter((m) => m >= first)
   return list.length ? list : [currentMonth()]
+}
+
+/** Totaux des sommes en attente, convertis dans la devise de référence. */
+export function pendingTotals(d: Derived) {
+  let owedToMe = 0
+  let iOwe = 0
+  for (const t of d.pending) {
+    const v = d.convert(t.amount, d.db.accounts[t.accountId]?.currency ?? d.base)
+    if (t.kind === 'income') owedToMe += v
+    else if (t.kind === 'expense') iOwe += v
+  }
+  return { owedToMe, iOwe }
 }

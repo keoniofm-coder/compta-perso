@@ -57,13 +57,13 @@ export function SettingsPage() {
   }
   const exportCSV = () => {
     const rows = [['Date', 'Type', 'Libellé', 'Catégorie', 'Compte', 'Vers', 'Montant', 'Devise', 'Montant reçu', 'Perso/Pro', 'Tiers', 'Note']]
-    for (const t of d.transactions) {
+    for (const t of [...d.transactions, ...d.pending]) {
       const a = db.accounts[t.accountId]
       const to = t.toAccountId ? db.accounts[t.toAccountId] : undefined
       const amount = t.kind === 'checkpoint' ? d.checkpointDelta.get(t.id) ?? 0 : t.kind === 'expense' ? -t.amount : t.amount
       rows.push([
         t.date,
-        { income: 'Entrée', expense: 'Sortie', transfer: 'Virement', checkpoint: 'Ajustement' }[t.kind],
+        { income: 'Entrée', expense: 'Sortie', transfer: 'Virement', checkpoint: 'Ajustement' }[t.kind] + (t.pending ? ' (en attente)' : ''),
         t.label,
         t.category ? categoryMeta(t.category).label : '',
         a?.name ?? '',

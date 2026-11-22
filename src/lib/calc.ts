@@ -71,6 +71,8 @@ export interface Derived {
   checkpointDelta: Map<string, number>
   totals: Totals
   transactions: Transaction[]
+  /** Entrées / sorties en attente (pas encore payées), hors soldes. */
+  pending: Transaction[]
   assetValue: (a: Asset, date?: string) => number
   liabilityRemainingAt: (l: Liability, date: string) => number
   balanceAt: (accountId: string, date: string) => number
@@ -148,7 +150,9 @@ export function replayHolding(holding: Holding, ops: HoldingOp[], until?: string
 export function computeDerived(db: DB, convert: Converter, base: string, liveRates: Record<string, number>): Derived {
   const todayStr = today()
   const accountsArr = Object.values(db.accounts)
-  const txs = Object.values(db.transactions).sort(byDateSeq)
+  const allTxs = Object.values(db.transactions).sort(byDateSeq)
+  const txs = allTxs.filter((t) => !t.pending)
+  const pending = allTxs.filter((t) => t.pending)
   const opsByHolding = new Map<string, HoldingOp[]>()
   for (const op of Object.values(db.ops)) {
     const list = opsByHolding.get(op.holdingId) ?? []
@@ -369,6 +373,7 @@ export function computeDerived(db: DB, convert: Converter, base: string, liveRat
     checkpointDelta,
     totals,
     transactions: txs,
+    pending,
     assetValue,
     liabilityRemainingAt,
     balanceAt,

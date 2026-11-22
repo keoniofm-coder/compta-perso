@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Plus, Trash2, X } from 'lucide-react'
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CheckCircle2, Hourglass, Plus, Trash2, X } from 'lucide-react'
 import { AccountSelect } from '../components/common'
 import { AmountInput, Button, Field, Input, Modal, Segmented, Select, Switch, TextArea, cx } from '../components/ui'
 import { useDerived } from '../lib/calc'
@@ -63,6 +63,7 @@ export function TxForm({
   const [addAsset, setAddAsset] = useState(false)
   const [assetCategory, setAssetCategory] = useState<AssetCategory>('informatique')
   const [depYears, setDepYears] = useState('4')
+  const [pending, setPending] = useState(tx?.pending ?? preset?.pending ?? false)
   const [makeRecurring, setMakeRecurring] = useState(false)
   const [frequency, setFrequency] = useState<Frequency>('monthly')
   const [error, setError] = useState('')
@@ -89,8 +90,12 @@ export function TxForm({
     if (a && !editing) setScope(a.scope)
   }
 
-  const save = () => {
+  const canPend = kind !== 'transfer' && !(kind === 'expense' && multi)
+  const isPending = canPend && pending
+
+  const save = (opts?: { settle?: boolean }) => {
     setError('')
+    const settle = !!opts?.settle
     if (kind === 'expense' && multi && !editing) {
       const valid = lines.filter((l) => l.accountId && parseAmount(l.amount) > 0)
       if (valid.length < 1) return setError('Ajoute au moins un compte avec un montant')
@@ -131,7 +136,7 @@ export function TxForm({
     const id = tx?.id ?? uid()
     let recurringId = tx?.recurringId
     let recurringPeriod = tx?.recurringPeriod
-    if (makeRecurring && !editing) {
+    if (makeRecurring && !editing && !isPending) {
       const rec: Recurring = {
         id: uid(),
         kind,
@@ -157,7 +162,7 @@ export function TxForm({
       ...(tx ?? {}),
       id,
       kind,
-      date,
+      date: settle ? today() : date,
       amount: amountNum,
       accountId,
       toAccountId: kind === 'transfer' ? toAccountId : undefined,
@@ -170,15 +175,22 @@ export function TxForm({
       scope,
       recurringId,
       recurringPeriod,
+      pending: isPending && !settle ? true : undefined,
       createdAt: tx?.createdAt ?? Date.now(),
     }
-    if (addAsset && kind === 'expense' && !editing) {
+    if (addAsset && kind === 'expense' && !editing && !isPending) {
       const assetId = createAsset(lbl, amountNum, acc.currency, id)
       next.assetId = assetId
     }
     put('transactions', next)
     rememberAccount(kind, accountId)
-    toast(editing ? 'Mouvement mis à jour' : kind === 'income' ? 'Entrée enregistrée' : kind === 'expense' ? 'Sortie enregistrée' : 'Virement enregistré')
+    toast(
+      settle
+        ? kind === 'income' ? 'Marqué comme reçu' : 'Marqué comme payé'
+        : next.pending
+          ? 'Noté en attente'
+          : editing ? 'Mouvement mis à jour' : kind === 'income' ? 'Entrée enregistrée' : kind === 'expense' ? 'Sortie enregistrée' : 'Virement enregistré',
+    )
     onClose()
   }
 
@@ -209,7 +221,7 @@ export function TxForm({
     onClose()
   }
 
-  const kindTitle = editing ? 'Modifier le mouvement' : kind === 'income' ? 'Nouvelle entrée' : kind === 'expense' ? 'Nouvelle sortie' : 'Nouveau virement'
+  const kindTitle = editing ? (tx?.pending ? 'Modifier (en attente)' : 'Modifier le mouvement') : kind === 'income' ? 'Nouvelle entrée' : kind === 'expense' ? 'Nouvelle sortie' : 'Nouveau virement'
 
   return (
     <Modal
@@ -220,7 +232,10 @@ export function TxForm({
         <>
           {editing && <Button variant="ghost" icon={Trash2} className="mr-auto text-rose-600" onClick={del}>Supprimer</Button>}
           <Button variant="ghost" onClick={onClose}>Annuler</Button>
-          <Button variant="primary" onClick={save}>{editing ? 'Enregistrer' : 'Ajouter'}</Button>
+          {editing && tx?.pending && isPending && (
+            <Button variant="soft" icon={CheckCircle2} onClick={() => save({ settle: true })}>{kind === 'income' ? 'Reçu' : 'Payé'}</Button>
+          )}
+          <Button variant="primary" onClick={() => save()}>{editing ? 'Enregistrer' : 'Ajouter'}</Button>
         </>
       }
     >
@@ -374,11 +389,31 @@ export function TxForm({
           </div>
         )}
 
+        {canPend && (
+          <div className={cx('rounded-2xl border p-4 transition-colors', isPending ? 'border-amber-400/60 bg-amber-500/10' : 'border-line bg-surface-2')}>
+            <Switch
+              checked={pending}
+              onChange={setPending}
+              label={
+                <span className="inline-flex items-center gap-1.5">
+                  <Hourglass className="size-4 text-amber-500" />
+                  {kind === 'income' ? 'En attente : on me doit cette somme' : 'En attente : je dois cette somme'}
+                </span>
+              }
+              hint={
+                kind === 'income'
+                  ? "Pas encore reçue : elle reste notée dans « En attente » sans toucher à tes soldes. Tu la valides quand l'argent arrive."
+                  : "Pas encore payée : elle reste notée dans « En attente » sans toucher à tes soldes. Tu la valides quand c'est réglé."
+              }
+            />
+          </div>
+        )}
+
         <Field label="Note" hint="Optionnel">
           <TextArea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>
 
-        {!editing && (
+        {!editing && !isPending && (
           <div className="rounded-2xl border border-line bg-surface-2 p-4 space-y-3">
             <Switch
               checked={makeRecurring}

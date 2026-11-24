@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CalendarClock, CheckCheck, CheckCircle2, Clock, Plus, Repeat, Undo2 } from 'lucide-react'
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CalendarClock, CheckCheck, CheckCircle2, Clock, Pencil, Plus, Repeat, Undo2 } from 'lucide-react'
 import { SegmentBar } from '../components/charts'
 import { txVisual } from '../components/common'
-import { Badge, Button, Card, CardHeader, EmptyState, IconChip, Money, MonthPicker, PageHeader, Progress, Stat, cx } from '../components/ui'
+import { Badge, Button, Card, CardHeader, EmptyState, IconButton, IconChip, Money, MonthPicker, PageHeader, Progress, Stat, cx } from '../components/ui'
 import { expectedAmount, monthlyEquivalent, occurrences, recurringTotals, recurringTx, useDerived, type Occurrence } from '../lib/calc'
 import { currentMonth, dateLabel } from '../lib/dates'
 import { FREQUENCIES, categoryMeta } from '../lib/meta'
@@ -22,7 +22,7 @@ function OccRow({ o }: { o: Occurrence }) {
   const acc = d.db.accounts[r.accountId]
   const to = r.toAccountId ? d.db.accounts[r.toAccountId] : undefined
   const v = o.tx ? txVisual(o.tx) : recVisual(r)
-  const amount = o.tx?.amount ?? expectedAmount(d.db, r)
+  const amount = o.tx?.amount ?? expectedAmount(r, o.month)
   const approx = !o.tx && r.variable
   const sign = r.kind === 'income' ? 1 : r.kind === 'expense' ? -1 : 0
   return (
@@ -42,7 +42,7 @@ function OccRow({ o }: { o: Occurrence }) {
           <div className="text-sm font-medium text-ink truncate">{r.label}</div>
           <div className="text-xs text-muted truncate">{to ? `${acc?.name} → ${to.name}` : acc?.name}{r.scope === 'pro' ? ' · pro' : ''}{r.auto ? ' · automatique' : ''}</div>
         </div>
-        <span className={cx('text-sm font-semibold hidden sm:inline whitespace-nowrap', approx && 'opacity-70')} title={approx ? 'Montant estimé : saisis le montant exact en validant' : undefined}>
+        <span className={cx('text-sm font-semibold hidden sm:inline whitespace-nowrap', approx && 'opacity-70')} title={approx ? 'Montant estimé : ajuste-le avec le crayon, puis valide le montant exact' : undefined}>
           {approx && <span className="text-muted mr-0.5">≈</span>}
           <Money value={sign * amount || amount} currency={acc?.currency ?? d.base} sign={sign !== 0} colored={sign !== 0} />
         </span>
@@ -74,9 +74,18 @@ function OccRow({ o }: { o: Occurrence }) {
           Auto
         </span>
       ) : (
-        <Button size="sm" variant={o.status === 'late' ? 'primary' : 'secondary'} onClick={() => openModal({ type: 'validate', recurringId: r.id, month: o.month })}>
-          Valider
-        </Button>
+        <div className="flex items-center gap-1.5">
+          {r.variable && (
+            <IconButton
+              icon={Pencil}
+              label={`Modifier l'estimation de ${dateLabel(o.date, { month: 'long' })}`}
+              onClick={() => openModal({ type: 'validate', recurringId: r.id, month: o.month, intent: 'estimate' })}
+            />
+          )}
+          <Button size="sm" variant={o.status === 'late' ? 'primary' : 'secondary'} onClick={() => openModal({ type: 'validate', recurringId: r.id, month: o.month })}>
+            Valider
+          </Button>
+        </div>
       )}
     </div>
   )
@@ -105,7 +114,7 @@ function RecRow({ r }: { r: Recurring }) {
       <div className="text-right">
         <span className="text-sm font-semibold whitespace-nowrap">
           {r.variable && <span className="text-muted mr-0.5">≈</span>}
-          <Money value={sign ? sign * expectedAmount(d.db, r) : expectedAmount(d.db, r)} currency={acc?.currency ?? d.base} sign={!!sign} colored={!!sign} />
+          <Money value={sign ? sign * expectedAmount(r) : expectedAmount(r)} currency={acc?.currency ?? d.base} sign={!!sign} colored={!!sign} />
         </span>
         {r.frequency !== 'monthly' && (
           <div className="text-[11.5px] text-muted">

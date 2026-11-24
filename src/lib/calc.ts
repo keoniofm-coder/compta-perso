@@ -624,18 +624,20 @@ export function recurringHistory(db: DB, r: Recurring, n = 3) {
     .slice(0, n)
 }
 
-/** Montant attendu : le montant saisi, ou pour un montant variable la moyenne des 3 derniers mois validés. */
-export function expectedAmount(db: DB, r: Recurring) {
-  if (!r.variable) return r.amount
-  const last = recurringHistory(db, r)
-  return last.length ? last.reduce((s, t) => s + t.amount, 0) / last.length : r.amount
+/**
+ * Montant attendu : le montant saisi. Pour un montant variable, c'est l'estimation que tu donnes,
+ * éventuellement ajustée pour un mois précis.
+ */
+export function expectedAmount(r: Recurring, month?: string) {
+  if (r.variable && month && r.estimates?.[month] != null) return r.estimates[month]
+  return r.amount
 }
 
 /** Mouvement créé quand on valide une échéance (à la main ou automatiquement). */
 export function recurringTx(db: DB, convert: Converter, r: Recurring, month: string, createdAt: number, id?: string): Transaction {
   const acc = db.accounts[r.accountId]
   const to = r.toAccountId ? db.accounts[r.toAccountId] : undefined
-  const amount = expectedAmount(db, r)
+  const amount = expectedAmount(r, month)
   return {
     id: id ?? stableUuid(`${r.id}:${month}:${createdAt}`),
     kind: r.kind,
@@ -677,7 +679,7 @@ export function dueAutoTransactions(db: DB, convert: Converter): Transaction[] {
 
 export function monthlyEquivalent(d: Derived, r: Recurring) {
   const acc = d.db.accounts[r.accountId]
-  return d.convert((expectedAmount(d.db, r) * FREQUENCIES[r.frequency].perYear) / 12, acc?.currency ?? d.base)
+  return d.convert((expectedAmount(r) * FREQUENCIES[r.frequency].perYear) / 12, acc?.currency ?? d.base)
 }
 
 export function recurringTotals(d: Derived, scope?: 'perso' | 'pro') {

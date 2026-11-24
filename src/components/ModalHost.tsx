@@ -19,7 +19,7 @@ function render(m: ModalSpec, onClose: () => void) {
     case 'recurring':
       return <RecurringForm onClose={onClose} id={m.id} preset={m.preset} />
     case 'validate':
-      return <ValidateForm onClose={onClose} recurringId={m.recurringId} month={m.month} />
+      return <ValidateForm onClose={onClose} recurringId={m.recurringId} month={m.month} intent={m.intent} />
     case 'holding':
       return <HoldingForm onClose={onClose} id={m.id} accountId={m.accountId} />
     case 'op':

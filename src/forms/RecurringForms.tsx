@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CheckCircle2, Trash2 } from 'lucide-react'
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CheckCircle2, Pencil, Trash2 } from 'lucide-react'
 import { AccountSelect } from '../components/common'
 import { AmountInput, Button, Field, Input, Modal, Segmented, Select, Switch } from '../components/ui'
 import { expectedAmount, recurringHistory, useDerived } from '../lib/calc'
@@ -202,15 +202,10 @@ export function RecurringForm({ onClose, id, preset }: { onClose: () => void; id
             label="Montant variable"
             hint={
               kind === 'income'
-                ? "Pour un salaire qui dépend de ton CA. Le montant ci-dessus sert d'estimation, puis l'app prend la moyenne de tes 3 derniers mois validés. Tu saisis le montant exact quand tu es payé."
-                : "Pour une facture qui change chaque mois. Le montant ci-dessus sert d'estimation, puis l'app prend la moyenne de tes 3 derniers mois validés."
+                ? "Pour un salaire qui dépend de ton CA. Le montant estimé est celui affiché et compté dans tes prévisions. Tu peux l'ajuster pour un mois précis dans l'échéancier, puis tu valides le montant exact quand tu es payé."
+                : "Pour une facture qui change chaque mois. Le montant estimé est celui affiché et compté dans tes prévisions. Tu peux l'ajuster pour un mois précis dans l'échéancier, puis tu valides le montant exact."
             }
           />
-        )}
-        {existing?.variable && variable && expectedAmount(d.db, existing) !== existing.amount && (
-          <p className="-mt-2 text-xs text-muted">
-            Estimation actuelle : <b className="text-ink">≈ {formatMoney(expectedAmount(d.db, existing), acc?.currency ?? d.base)}</b> (moyenne de {recurringHistory(d.db, existing).length} mois)
-          </p>
         )}
         {!(kind !== 'transfer' && variable) && (
         <Switch
@@ -227,19 +222,45 @@ export function RecurringForm({ onClose, id, preset }: { onClose: () => void; id
   )
 }
 
-/** Valider une échéance : crée le mouvement réel (montant ajustable). */
-export function ValidateForm({ onClose, recurringId, month }: { onClose: () => void; recurringId: string; month: string }) {
+/**
+ * Valider une échéance : crée le mouvement réel (montant ajustable).
+ * Pour un montant variable, on peut aussi juste ajuster l'estimation du mois sans valider.
+ */
+export function ValidateForm({ onClose, recurringId, month, intent = 'validate' }: { onClose: () => void; recurringId: string; month: string; intent?: 'validate' | 'estimate' }) {
   const d = useDerived()
   const r = d.db.recurrings[recurringId]
-  const estimate = r ? expectedAmount(d.db, r) : 0
-  // Montant variable : champ vide pour saisir le montant exact, l'estimation reste visible en indice.
-  const [amount, setAmount] = useState(r && !r.variable ? String(r.amount).replace('.', ',') : '')
+  const estimate = r ? expectedAmount(r, month) : 0
+  const [amount, setAmount] = useState(r ? String(Math.round(estimate * 100) / 100).replace('.', ',') : '')
   const [date, setDate] = useState(r ? dayInMonth(month, r.day) : '')
   const [error, setError] = useState('')
   if (!r) return null
   const history = r.variable ? recurringHistory(d.db, r) : []
   const acc = d.db.accounts[r.accountId]
   const to = r.toAccountId ? d.db.accounts[r.toAccountId] : undefined
+  const cur = acc?.currency ?? d.base
+  const custom = r.variable && r.estimates?.[month] != null
+  const asEstimate = r.variable && intent === 'estimate'
+
+  const putEstimates = (estimates: Record<string, number>) =>
+    useData.getState().put('recurrings', { ...r, estimates: Object.keys(estimates).length ? estimates : undefined })
+
+  const saveEstimate = () => {
+    const amt = parseAmount(amount)
+    if (!(amt > 0)) return setError('Indique un montant estimé')
+    const next = { ...(r.estimates ?? {}) }
+    if (amt === r.amount) delete next[month]
+    else next[month] = amt
+    putEstimates(next)
+    toast(`Estimation de ${monthLabel(month).toLowerCase()} : ${formatMoney(amt, cur)}`)
+    onClose()
+  }
+
+  const resetEstimate = () => {
+    const next = { ...(r.estimates ?? {}) }
+    delete next[month]
+    putEstimates(next)
+    setAmount(String(r.amount).replace('.', ','))
+  }
 
   const save = () => {
     const amt = parseAmount(amount)
@@ -268,27 +289,55 @@ export function ValidateForm({ onClose, recurringId, month }: { onClose: () => v
 
   return (
     <Modal
-      title={`Valider « ${r.label} »`}
+      title={asEstimate ? `Estimation « ${r.label} »` : `Valider « ${r.label} »`}
       subtitle={`${monthLabel(month)} · ${acc?.name ?? ''}${to ? ` → ${to.name}` : ''}`}
-      size="sm"
+      size={r.variable ? undefined : 'sm'}
       onClose={onClose}
-      icon={<span className="size-10 rounded-xl bg-emerald-500/12 text-emerald-600 flex items-center justify-center shrink-0"><CheckCircle2 className="size-5" /></span>}
+      icon={
+        asEstimate ? (
+          <span className="size-10 rounded-xl bg-sky-500/12 text-sky-600 flex items-center justify-center shrink-0"><Pencil className="size-5" /></span>
+        ) : (
+          <span className="size-10 rounded-xl bg-emerald-500/12 text-emerald-600 flex items-center justify-center shrink-0"><CheckCircle2 className="size-5" /></span>
+        )
+      }
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>Annuler</Button>
-          <Button variant="primary" onClick={save}>Valider</Button>
+          {!r.variable && <Button variant="ghost" onClick={onClose}>Annuler</Button>}
+          {r.variable && (
+            <Button variant={asEstimate ? 'primary' : 'secondary'} onClick={saveEstimate}>
+              {asEstimate ? "Enregistrer l'estimation" : 'Garder en estimation'}
+            </Button>
+          )}
+          <Button variant={asEstimate ? 'secondary' : 'primary'} onClick={save}>
+            {asEstimate ? (r.kind === 'income' ? "C'est reçu, valider" : "C'est payé, valider") : 'Valider'}
+          </Button>
         </>
       }
     >
       <div className="space-y-4">
         <Field
-          label={r.variable ? (r.kind === 'income' ? 'Montant exact reçu' : 'Montant exact payé') : 'Montant réel'}
-          hint={r.variable ? `Estimation : ≈ ${formatMoney(estimate, acc?.currency ?? d.base)}${history.length ? ` (moyenne de ${history.length} mois)` : ''}` : `Prévu : ${formatMoney(r.amount, acc?.currency ?? d.base)}`}
+          label={r.variable ? (asEstimate ? `Montant estimé pour ${monthLabel(month).toLowerCase()}` : r.kind === 'income' ? 'Montant reçu' : 'Montant payé') : 'Montant réel'}
+          hint={
+            r.variable
+              ? asEstimate
+                ? 'Modifie-le autant que tu veux, il reste une estimation tant que tu ne valides pas.'
+                : `Pas encore payé ? « Garder en estimation » met juste à jour le montant prévu de ${monthLabel(month).toLowerCase()}.`
+              : `Prévu : ${formatMoney(r.amount, cur)}`
+          }
         >
-          <AmountInput big autoFocus value={amount} onChange={setAmount} currency={acc ? ccy(acc.currency) : ''} placeholder={r.variable ? `≈ ${String(Math.round(estimate * 100) / 100).replace('.', ',')}` : undefined} />
+          <AmountInput big autoFocus value={amount} onChange={setAmount} currency={acc ? ccy(acc.currency) : ''} />
         </Field>
-        {history.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 -mt-1">
+        {r.variable && (
+          <div className="flex flex-wrap items-center gap-1.5 -mt-1">
+            {custom ? (
+              <button
+                type="button"
+                onClick={resetEstimate}
+                className="h-8 px-3 rounded-full border border-line-strong text-[12.5px] text-ink-2 hover:text-ink hover:border-indigo-400"
+              >
+                Estimation habituelle : <b className="text-ink">{formatMoney(r.amount, cur)}</b>
+              </button>
+            ) : null}
             {history.map((t) => (
               <button
                 key={t.id}
@@ -296,14 +345,16 @@ export function ValidateForm({ onClose, recurringId, month }: { onClose: () => v
                 onClick={() => setAmount(String(t.amount).replace('.', ','))}
                 className="h-8 px-3 rounded-full border border-line-strong text-[12.5px] text-ink-2 hover:text-ink hover:border-indigo-400"
               >
-                {monthLabel(t.recurringPeriod!, 'short')} : <b className="text-ink">{formatMoney(t.amount, acc?.currency ?? d.base)}</b>
+                {monthLabel(t.recurringPeriod!, 'short')} : <b className="text-ink">{formatMoney(t.amount, cur)}</b>
               </button>
             ))}
           </div>
         )}
-        <Field label="Date">
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </Field>
+        {!asEstimate && (
+          <Field label="Date">
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+        )}
         {error && <div className="text-sm font-medium text-neg">{error}</div>}
       </div>
     </Modal>

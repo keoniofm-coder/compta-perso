@@ -423,7 +423,7 @@ export function Modal({
           <IconButton icon={X} label="Fermer" onClick={onClose} className="-mr-2 -mt-1" />
         </div>
         <div className="px-5 sm:px-6 pb-5 overflow-y-auto overscroll-contain flex-1">{children}</div>
-        {footer && <div className="px-5 sm:px-6 py-4 border-t border-line flex items-center justify-end gap-2 safe-bottom bg-surface rounded-b-3xl">{footer}</div>}
+        {footer && <div className="px-5 sm:px-6 py-4 border-t border-line flex flex-wrap items-center justify-end gap-2 safe-bottom bg-surface rounded-b-3xl">{footer}</div>}
       </div>
     </div>,
     document.body,

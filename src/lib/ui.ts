@@ -7,7 +7,7 @@ export type ModalSpec =
   | { type: 'account'; id?: string; preset?: { type?: string } }
   | { type: 'checkpoint'; accountId: string; month?: string; txId?: string }
   | { type: 'recurring'; id?: string; preset?: Record<string, unknown> }
-  | { type: 'validate'; recurringId: string; month: string }
+  | { type: 'validate'; recurringId: string; month: string; intent?: 'validate' | 'estimate' }
   | { type: 'holding'; id?: string; accountId?: string }
   | { type: 'op'; holdingId: string; id?: string; kind?: string }
   | { type: 'asset'; id?: string; preset?: Record<string, unknown> }

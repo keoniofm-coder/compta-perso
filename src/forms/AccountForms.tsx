@@ -267,11 +267,7 @@ export function CheckpointForm({ onClose, accountId: accountId0, month: month0, 
   const declared = parseAmount(value)
   const delta = value.trim() ? declared - before : 0
   const months = [0, -1, -2, -3, -4, -5].map((n) => addMonths(currentMonth(), n))
-  const defaultLabel = isCourant
-    ? delta > 0
-      ? 'Correction du solde'
-      : 'Dépense courante'
-    : `Solde constaté${mode === 'month' ? ` fin ${monthLabel(monthOf(effDate)).toLowerCase()}` : ''}`
+  const defaultLabel = isCourant ? (delta > 0 ? 'Correction du solde' : 'Dépense courante') : 'Mouvement'
   const since =
     lastUpdate && monthOf(lastUpdate) === monthOf(effDate)
       ? `depuis ta dernière mise à jour (${dateLabel(lastUpdate, { day: 'numeric', month: 'short' })})`
@@ -307,7 +303,7 @@ export function CheckpointForm({ onClose, accountId: accountId0, month: month0, 
         : []
     if (dupes.length) useData.getState().removeMany(dupes.map((t) => ({ collection: 'transactions', id: t.id })))
     useData.getState().put('transactions', tx)
-    if (isCourant && delta < 0) toast(`${tx.label} : ${formatMoney(-delta, acc.currency)} comptés en dépense`)
+    if (delta && (isCourant ? delta < 0 : true)) toast(`${tx.label} : ${formatMoney(Math.abs(delta), acc.currency)} comptés en ${delta < 0 ? 'sortie' : 'entrée'}`)
     else toast(isCourant && mode === 'month' ? 'Mois clôturé' : 'Solde mis à jour')
     onClose()
   }
@@ -412,13 +408,15 @@ export function CheckpointForm({ onClose, accountId: accountId0, month: month0, 
                   <>Il te reste <b>{formatMoney(delta, acc.currency)}</b> de plus que prévu (une entrée non enregistrée ?). Le solde sera corrigé.</>
                 )
               ) : (
-                <>Écart de <b>{formatMoney(delta, acc.currency, { sign: true })}</b> ({delta >= 0 ? 'plus-value / intérêts' : 'moins-value / frais'}) enregistré comme ajustement.</>
+                <>
+                  Écart de <b>{formatMoney(delta, acc.currency, { sign: true })}</b> avec le solde calculé. Il sera compté comme {delta >= 0 ? 'une entrée' : 'une sortie'} dans tes entrées & sorties.
+                </>
               )}
             </div>
           </div>
         )}
 
-        <Field label="Libellé" hint={isCourant ? 'Modifie-le si c’est autre chose' : undefined}>
+        <Field label="Libellé" hint="Modifie-le si c’est autre chose">
           <Input value={label ?? defaultLabel} onChange={(e) => setLabel(e.target.value)} placeholder={defaultLabel} />
         </Field>
 

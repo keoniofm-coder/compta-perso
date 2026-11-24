@@ -3,7 +3,7 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, BriefcaseBusiness, CheckCi
 import { Donut, SeriesLines, useSeriesColor } from '../components/charts'
 import { AccountIcon, TxRow } from '../components/common'
 import { Badge, Button, Card, CardHeader, EmptyState, Money, PageHeader, Progress, Segmented, Stat } from '../components/ui'
-import { activeMonths, lastMonths, monthlyFlows, useDerived } from '../lib/calc'
+import { activeMonths, flowKind, lastMonths, monthlyFlows, useDerived } from '../lib/calc'
 import { formatPct } from '../lib/currency'
 import { currentMonth, monthLabel, monthOf, relativeDay } from '../lib/dates'
 import { categoryMeta } from '../lib/meta'
@@ -53,11 +53,11 @@ export function Business() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proTx.length, d])
 
-  // Historique : tout ce qui touche l'agence (mouvement pro ou compte pro), hors soldes vérifiés.
+  // Historique : tout ce qui touche l'agence (mouvement pro ou compte pro), mises à jour du solde comprises.
   const isAgency = (t: Transaction) => t.scope === 'pro' || d.db.accounts[t.accountId]?.scope === 'pro' || (!!t.toAccountId && d.db.accounts[t.toAccountId]?.scope === 'pro')
   const moves = d.transactions
-    .filter((t) => t.kind !== 'checkpoint' && monthSet.has(monthOf(t.date)) && isAgency(t))
-    .filter((t) => moveKind === 'all' || t.kind === moveKind)
+    .filter((t) => monthSet.has(monthOf(t.date)) && isAgency(t))
+    .filter((t) => moveKind === 'all' || flowKind(d, t) === moveKind)
     .reverse()
   const movesByDay = new Map<string, Transaction[]>()
   for (const t of moves.slice(0, moveLimit)) movesByDay.set(t.date, [...(movesByDay.get(t.date) ?? []), t])

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Archive, ChevronRight, Plus, Wallet } from 'lucide-react'
+import { Archive, ChevronRight, Plus, Scale, Wallet } from 'lucide-react'
 import { SegmentBar } from '../components/charts'
 import { AccountIcon, useAccountColor } from '../components/common'
 import { Badge, Button, Card, EmptyState, Money, PageHeader, cx } from '../components/ui'
@@ -50,6 +50,7 @@ export function Accounts() {
   const colorOf = useAccountColor()
   const [showArchived, setShowArchived] = useState(false)
   const list = d.accounts.filter((s) => showArchived || !s.account.archived)
+  const updateTarget = d.accounts.find((s) => !s.account.archived && s.account.type === 'courant') ?? d.accounts.find((s) => !s.account.archived)
   const archivedCount = d.accounts.filter((s) => s.account.archived).length
   const total = list.filter((s) => !s.account.excludeFromNetWorth).reduce((sum, s) => sum + s.totalBase, 0)
 
@@ -72,6 +73,11 @@ export function Accounts() {
             {archivedCount > 0 && (
               <Button variant="ghost" size="sm" icon={Archive} onClick={() => setShowArchived(!showArchived)}>
                 {showArchived ? 'Masquer' : 'Voir'} les archivés ({archivedCount})
+              </Button>
+            )}
+            {updateTarget && (
+              <Button icon={Scale} onClick={() => openModal({ type: 'checkpoint', accountId: updateTarget.account.id })}>
+                Mettre à jour un solde
               </Button>
             )}
             <Button variant="primary" icon={Plus} onClick={() => openModal({ type: 'account' })}>Nouveau compte</Button>

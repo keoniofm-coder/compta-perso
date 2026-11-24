@@ -63,7 +63,7 @@ export function SettingsPage() {
       const amount = t.kind === 'checkpoint' ? d.checkpointDelta.get(t.id) ?? 0 : t.kind === 'expense' ? -t.amount : t.amount
       rows.push([
         t.date,
-        { income: 'Entrée', expense: 'Sortie', transfer: 'Virement', checkpoint: 'Ajustement' }[t.kind],
+        { income: 'Entrée', expense: 'Sortie', transfer: 'Virement', checkpoint: 'Mise à jour du solde' }[t.kind],
         t.label,
         t.category ? categoryMeta(t.category).label : '',
         a?.name ?? '',

@@ -4,7 +4,7 @@ import { Donut } from '../components/charts'
 import { AccountSelect, TxRow } from '../components/common'
 import { PendingCard } from '../components/Pending'
 import { Button, Card, CardHeader, EmptyState, Input, Money, MonthPicker, PageHeader, Segmented, Stat, cx } from '../components/ui'
-import { monthlyFlows, useDerived } from '../lib/calc'
+import { flowKind, monthlyFlows, useDerived } from '../lib/calc'
 import { currentMonth, monthOf, relativeDay } from '../lib/dates'
 import { categoryMeta } from '../lib/meta'
 import type { Transaction } from '../lib/types'
@@ -30,8 +30,7 @@ export function Movements() {
       .filter((t) => allTime || monthOf(t.date) === month)
       .filter((t) => {
         if (kind === 'all') return true
-        if (kind === 'expense') return t.kind === 'expense' || (t.kind === 'checkpoint' && d.db.accounts[t.accountId]?.type === 'courant')
-        return t.kind === kind
+        return flowKind(d, t) === kind
       })
       .filter((t) => scope === 'all' || t.scope === scope)
       .filter((t) => !accountId || t.accountId === accountId || t.toAccountId === accountId)

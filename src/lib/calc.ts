@@ -503,6 +503,23 @@ export function monthlyFlows(d: Derived, months: string[], scope?: 'perso' | 'pr
       f.expense += v
       f.expensePerso += v
       f.byCategory.vie_courante = (f.byCategory.vie_courante ?? 0) + v
+    } else if (t.kind === 'checkpoint' && acc.type !== 'courant' && (!scope || t.scope === scope)) {
+      // Mise à jour du solde d'un autre compte : l'écart compte comme une entrée ou une sortie.
+      const delta = d.checkpointDelta.get(t.id) ?? 0
+      if (!delta) continue
+      const v = d.convert(Math.abs(delta), acc.currency)
+      const k = t.category ?? 'checkpoint'
+      if (delta > 0) {
+        f.income += v
+        if (t.scope === 'pro') f.incomePro += v
+        else f.incomePerso += v
+        f.incomeByCategory[k] = (f.incomeByCategory[k] ?? 0) + v
+      } else {
+        f.expense += v
+        if (t.scope === 'pro') f.expensePro += v
+        else f.expensePerso += v
+        f.byCategory[k] = (f.byCategory[k] ?? 0) + v
+      }
     }
   }
   for (const f of map.values()) f.net = f.income - f.expense
@@ -525,6 +542,16 @@ export interface CourantMonth {
   updates: Transaction[]
   /** Somme des dépenses courantes constatées dans le mois (undefined si aucune mise à jour). */
   spent?: number
+}
+
+/**
+ * Sens d'un mouvement pour les filtres Entrées / Sorties. Une mise à jour du solde d'un compte courant
+ * est toujours une dépense courante ; sur un autre compte, c'est une entrée ou une sortie selon l'écart.
+ */
+export function flowKind(d: Derived, t: Transaction): Transaction['kind'] {
+  if (t.kind !== 'checkpoint') return t.kind
+  if (d.db.accounts[t.accountId]?.type === 'courant') return 'expense'
+  return (d.checkpointDelta.get(t.id) ?? 0) > 0 ? 'income' : 'expense'
 }
 
 export function isMonthEnd(date: string) {

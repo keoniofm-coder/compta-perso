@@ -95,7 +95,8 @@ function PrivacyToggle() {
 
 function QuickActions({ onClose }: { onClose: () => void }) {
   const accounts = useData((s) => s.db.accounts)
-  const courant = Object.values(accounts).find((a) => a.type === 'courant' && !a.archived)
+  const active = Object.values(accounts).filter((a) => !a.archived)
+  const firstAccount = active.find((a) => a.type === 'courant') ?? active.sort((x, y) => (x.order ?? 0) - (y.order ?? 0))[0]
   const go = (fn: () => void) => {
     onClose()
     setTimeout(fn, 10)
@@ -106,7 +107,7 @@ function QuickActions({ onClose }: { onClose: () => void }) {
     { label: 'Virement', sub: "D'un compte à l'autre", icon: ArrowRightLeft, color: '#6366f1', fn: () => openModal({ type: 'tx', kind: 'transfer' }) },
     { label: 'Répartir', sub: 'Ventiler une rentrée', icon: Split, color: '#8b5cf6', fn: () => openModal({ type: 'split' }) },
   ]
-  if (courant) items.push({ label: 'Mettre à jour le solde', sub: 'Compte courant, quand tu veux', icon: Wallet, color: '#0ea5e9', fn: () => openModal({ type: 'checkpoint', accountId: courant.id }) })
+  if (firstAccount) items.push({ label: 'Mettre à jour un solde', sub: "N'importe quel compte, quand tu veux", icon: Wallet, color: '#0ea5e9', fn: () => openModal({ type: 'checkpoint', accountId: firstAccount.id }) })
   items.push({ label: 'Valider les fixes', sub: 'Échéancier du mois', icon: CalendarClock, color: '#f59e0b', fn: () => navigate('/fixes') })
   return (
     <Modal title="Ajouter" onClose={onClose} size="sm">

@@ -89,7 +89,7 @@ export function AccountDetail({ id }: { id: string }) {
               <Button size="sm" icon={ArrowDownLeft} onClick={() => openModal({ type: 'tx', kind: 'income', accountId: a.id })}>Entrée</Button>
               <Button size="sm" icon={ArrowUpRight} onClick={() => openModal({ type: 'tx', kind: 'expense', accountId: a.id })}>Sortie</Button>
               <Button size="sm" icon={ArrowRightLeft} onClick={() => openModal({ type: 'tx', kind: 'transfer', accountId: a.id })}>Virement</Button>
-              <Button size="sm" icon={Scale} onClick={() => openModal({ type: 'checkpoint', accountId: a.id })}>{a.type === 'courant' ? 'Clôturer le mois' : 'Mettre à jour le solde'}</Button>
+              <Button size="sm" icon={Scale} onClick={() => openModal({ type: 'checkpoint', accountId: a.id })}>Mettre à jour le solde</Button>
               {(a.type === 'invest' || a.type === 'crypto' || st.holdings.length > 0) && (
                 <Button size="sm" icon={LineChart} onClick={() => openModal({ type: 'holding', accountId: a.id })}>Placement</Button>
               )}

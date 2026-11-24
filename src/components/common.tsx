@@ -97,7 +97,7 @@ export function TxRow({ t, contextAccountId, showDate = false }: { t: Transactio
     const delta = d.checkpointDelta.get(t.id) ?? 0
     amount = delta
     label = t.label || 'Mise à jour du solde'
-    sub = [`Solde constaté`, acc?.name ?? '?']
+    sub = [acc?.type === 'courant' ? 'Mise à jour du solde' : 'Solde constaté', acc?.name ?? '?']
   }
   if (showDate) sub.unshift(dateLabel(t.date, { day: 'numeric', month: 'short' }))
   const neutral = t.kind === 'transfer' && !contextAccountId

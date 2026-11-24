@@ -42,7 +42,13 @@ export function TxForm({
     return (pref ?? accounts[0])?.id ?? ''
   }
 
-  const [accountId, setAccountId] = useState(tx?.accountId ?? preset?.accountId ?? acc0 ?? defaultAccount(initKind))
+  const [accountId, setAccountId] = useState(() => {
+    const a = tx?.accountId ?? preset?.accountId ?? acc0 ?? defaultAccount(initKind)
+    // « Approvisionner » le compte courant : le compte de départ ne peut pas être le même.
+    const to = tx ? undefined : preset?.toAccountId
+    if (to && a === to) return (accounts.find((x) => x.id !== to && x.type === 'banque') ?? accounts.find((x) => x.id !== to))?.id ?? a
+    return a
+  })
   const [toAccountId, setToAccountId] = useState(tx?.toAccountId ?? preset?.toAccountId ?? '')
   const [amount, setAmount] = useState(tx ? String(tx.amount).replace('.', ',') : preset?.amount ? String(preset.amount).replace('.', ',') : '')
   const [toAmount, setToAmount] = useState(tx?.toAmount != null ? String(tx.toAmount).replace('.', ',') : '')

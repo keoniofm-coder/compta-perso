@@ -19,7 +19,7 @@ import { AccountIcon, TxRow } from '../components/common'
 import { Badge, Button, Card, CardHeader, Delta, EmptyState, Money, Progress, Stat, cx } from '../components/ui'
 import { activeMonths, courantMonths, monthlyFlows, netWorthHistory, occurrences, pendingTotals, useDerived } from '../lib/calc'
 import { formatMoney, formatPct } from '../lib/currency'
-import { addMonths, currentMonth, monthLabel, monthShortYear, today } from '../lib/dates'
+import { addMonths, currentMonth, lastDayOf, monthLabel, monthShortYear, today } from '../lib/dates'
 import { ACCOUNT_TYPES } from '../lib/meta'
 import { useSettings } from '../lib/store'
 import { navigate, openModal, useUI } from '../lib/ui'
@@ -53,7 +53,8 @@ export function Dashboard() {
   const prevMonth = addMonths(month, -1)
   const unclosed = courants.filter((s) => {
     const [cm] = courantMonths(d, s.account.id, [prevMonth])
-    return !cm?.checkpoint && s.account.initialDate <= `${prevMonth}-28`
+    const updatedSince = s.lastCheckpoint && s.lastCheckpoint.date >= lastDayOf(prevMonth)
+    return !cm?.checkpoint && !updatedSince && s.account.initialDate <= `${prevMonth}-28`
   })
 
   const pnl = d.totals.holdingsValue - d.totals.holdingsCost

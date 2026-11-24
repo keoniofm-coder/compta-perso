@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Archive, ShoppingBag, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
 import { accountColor } from '../components/common'
 import { AmountInput, Button, Field, Input, Modal, Segmented, Select, Switch, TextArea, cx } from '../components/ui'
-import { useDerived } from '../lib/calc'
+import { isMonthEnd, useDerived } from '../lib/calc'
 import { CRYPTO, FIAT, allCurrencies, formatMoney, parseAmount } from '../lib/currency'
 import { addMonths, currentMonth, dateLabel, lastDayOf, monthLabel, monthOf, today } from '../lib/dates'
 import { ACCOUNT_TYPE_ORDER, ACCOUNT_TYPES } from '../lib/meta'
@@ -225,10 +225,11 @@ export function AccountForm({ onClose, id, preset }: { onClose: () => void; id?:
 
 /* ---------------- Clôture du mois / mise à jour du solde ---------------- */
 
-export function CheckpointForm({ onClose, accountId, month: month0, txId }: { onClose: () => void; accountId: string; month?: string; txId?: string }) {
+export function CheckpointForm({ onClose, accountId: accountId0, month: month0, txId }: { onClose: () => void; accountId: string; month?: string; txId?: string }) {
   const d = useDerived()
-  const st = d.accountById.get(accountId)
   const existing = txId ? d.db.transactions[txId] : undefined
+  const [accountId, setAccountId] = useState(existing?.accountId ?? accountId0)
+  const st = d.accountById.get(accountId)
   const acc = st?.account
   const isCourant = acc?.type === 'courant'
   const defaultMonth = (() => {
@@ -237,29 +238,54 @@ export function CheckpointForm({ onClose, accountId, month: month0, txId }: { on
     // Début de mois : on clôture le mois précédent par défaut.
     return Number(today().slice(8, 10)) <= 10 ? addMonths(currentMonth(), -1) : currentMonth()
   })()
-  const [mode, setMode] = useState<'month' | 'date'>(existing ? (existing.date === lastDayOf(monthOf(existing.date)) ? 'month' : 'date') : isCourant ? 'month' : 'date')
+  // Par défaut : mise à jour à la date du jour. La clôture de fin de mois reste dispo
+  // (et s'ouvre directement quand on vient d'un mois à clôturer).
+  const [mode, setMode] = useState<'month' | 'date'>(existing ? (isMonthEnd(existing.date) ? 'month' : 'date') : month0 ? 'month' : 'date')
   const [month, setMonth] = useState(defaultMonth)
   const [date, setDate] = useState(existing?.date ?? today())
   const [value, setValue] = useState(existing?.declaredBalance != null ? String(existing.declaredBalance).replace('.', ',') : '')
+  const [label, setLabel] = useState<string | null>(existing?.label ?? null)
   const [note, setNote] = useState(existing?.note ?? '')
 
   if (!st || !acc) return null
   const effDate = mode === 'month' ? lastDayOf(month) : date
-  // Solde calculé à cette date, sans tenir compte du relevé en cours d'édition.
+  const closing = isMonthEnd(effDate)
+  // Solde calculé à ce moment-là, sans tenir compte du relevé en cours d'édition.
+  // Une mise à jour en cours de mois se place après ce qui a été saisi avant elle ce jour-là.
+  const selfSeq = existing ? st.events.find((ev) => ev.txId === existing.id)?.seq ?? Infinity : Infinity
   let before = acc.initialBalance || 0
+  let lastUpdate: string | undefined
   for (const ev of st.events) {
     if (ev.date > effDate) break
     if (ev.txId === existing?.id) continue
-    if (ev.kind === 'checkpoint') before = d.db.transactions[ev.txId!]?.declaredBalance ?? before
-    else before += ev.delta
+    if (ev.date === effDate && !closing && ev.seq > selfSeq) continue
+    if (ev.kind === 'checkpoint') {
+      before = d.db.transactions[ev.txId!]?.declaredBalance ?? before
+      lastUpdate = ev.date
+    } else before += ev.delta
   }
   const declared = parseAmount(value)
   const delta = value.trim() ? declared - before : 0
   const months = [0, -1, -2, -3, -4, -5].map((n) => addMonths(currentMonth(), n))
+  const defaultLabel = isCourant
+    ? delta > 0
+      ? 'Correction du solde'
+      : 'Dépense courante'
+    : `Solde constaté${mode === 'month' ? ` fin ${monthLabel(monthOf(effDate)).toLowerCase()}` : ''}`
+  const since =
+    lastUpdate && monthOf(lastUpdate) === monthOf(effDate)
+      ? `depuis ta dernière mise à jour (${dateLabel(lastUpdate, { day: 'numeric', month: 'short' })})`
+      : mode === 'month'
+        ? `sur ${monthLabel(month).toLowerCase()}`
+        : lastUpdate
+          ? `depuis ta dernière mise à jour (${dateLabel(lastUpdate, { day: 'numeric', month: 'short' })})`
+          : 'depuis le début du suivi'
+  const otherAccounts = existing ? [] : d.accounts.filter((s) => !s.account.archived)
+  const courantList = otherAccounts.filter((s) => s.account.type === 'courant')
+  const restList = otherAccounts.filter((s) => s.account.type !== 'courant')
 
   const save = () => {
     if (!value.trim()) return
-    const label = isCourant && delta <= 0 ? `Dépenses courantes — ${monthLabel(monthOf(effDate))}` : `Solde constaté${mode === 'month' ? ` fin ${monthLabel(monthOf(effDate)).toLowerCase()}` : ''}`
     const tx: Transaction = {
       ...(existing ?? {}),
       id: existing?.id ?? uid(),
@@ -268,33 +294,34 @@ export function CheckpointForm({ onClose, accountId, month: month0, txId }: { on
       amount: 0,
       declaredBalance: declared,
       accountId,
-      label,
+      label: label?.trim() || defaultLabel,
       category: isCourant ? 'vie_courante' : 'checkpoint',
       scope: acc.scope,
       note: note.trim() || undefined,
       createdAt: existing?.createdAt ?? Date.now(),
     }
-    // Une seule clôture par mois pour le compte courant.
+    // Une seule clôture de fin de mois par compte.
     const dupes =
       mode === 'month'
         ? d.transactions.filter((t) => t.kind === 'checkpoint' && t.accountId === accountId && t.date === effDate && t.id !== tx.id)
         : []
     if (dupes.length) useData.getState().removeMany(dupes.map((t) => ({ collection: 'transactions', id: t.id })))
     useData.getState().put('transactions', tx)
-    toast(isCourant ? 'Mois clôturé' : 'Solde mis à jour')
+    if (isCourant && delta < 0) toast(`${tx.label} : ${formatMoney(-delta, acc.currency)} comptés en dépense`)
+    else toast(isCourant && mode === 'month' ? 'Mois clôturé' : 'Solde mis à jour')
     onClose()
   }
 
   const del = async () => {
     if (!existing) return
-    if (!(await confirm({ title: 'Supprimer ce relevé ?', confirmLabel: 'Supprimer', danger: true }))) return
+    if (!(await confirm({ title: 'Supprimer cette mise à jour du solde ?', confirmLabel: 'Supprimer', danger: true }))) return
     useData.getState().remove('transactions', existing.id)
     onClose()
   }
 
   return (
     <Modal
-      title={isCourant ? 'Clôturer le mois' : 'Mettre à jour le solde'}
+      title={isCourant && mode === 'month' ? 'Clôturer le mois' : 'Mettre à jour le solde'}
       subtitle={`${acc.name} — indique ce qu'il reste réellement sur le compte`}
       onClose={onClose}
       footer={
@@ -306,13 +333,33 @@ export function CheckpointForm({ onClose, accountId, month: month0, txId }: { on
       }
     >
       <div className="space-y-5">
+        {otherAccounts.length > 1 && (
+          <Field label="Compte">
+            <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+              {courantList.length > 0 && (
+                <optgroup label="Comptes courants">
+                  {courantList.map((s) => (
+                    <option key={s.account.id} value={s.account.id}>{s.account.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {restList.length > 0 && (
+                <optgroup label="Autres comptes">
+                  {restList.map((s) => (
+                    <option key={s.account.id} value={s.account.id}>{s.account.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </Select>
+          </Field>
+        )}
         <Segmented
           className="w-full"
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'month', label: 'Fin de mois' },
-            { value: 'date', label: 'À une date précise' },
+            { value: 'date', label: 'Maintenant ou à une date' },
+            { value: 'month', label: 'Clôture fin de mois' },
           ]}
         />
         {mode === 'month' ? (
@@ -329,15 +376,15 @@ export function CheckpointForm({ onClose, accountId, month: month0, txId }: { on
             ))}
           </div>
         ) : (
-          <Field label="Date du relevé">
+          <Field label="Date" hint={date === today() ? "Aujourd'hui" : undefined}>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
         )}
 
         <div className="rounded-2xl bg-surface-2 border border-line p-4 flex items-center justify-between gap-3">
           <div>
-            <div className="text-[13px] text-ink-2">Solde calculé {mode === 'month' ? `au ${dateLabel(effDate, NUM_DATE)}` : 'à cette date'}</div>
-            <div className="text-xs text-muted">D'après tes virements et sorties enregistrés</div>
+            <div className="text-[13px] text-ink-2">Solde calculé {mode === 'month' ? `au ${dateLabel(effDate, NUM_DATE)}` : effDate === today() ? "aujourd'hui" : 'à cette date'}</div>
+            <div className="text-xs text-muted">{lastUpdate ? `Dernière mise à jour le ${dateLabel(lastUpdate, { day: 'numeric', month: 'short' })}, + mouvements notés depuis` : "D'après tes virements et sorties enregistrés"}</div>
           </div>
           <div className="text-lg font-bold text-ink tnum">{formatMoney(before, acc.currency)}</div>
         </div>
@@ -357,7 +404,10 @@ export function CheckpointForm({ onClose, accountId, month: month0, txId }: { on
             <div className="text-sm">
               {isCourant ? (
                 delta <= 0 ? (
-                  <>Tu as dépensé <b>{formatMoney(-delta, acc.currency)}</b> au quotidien sur {mode === 'month' ? monthLabel(month).toLowerCase() : 'la période'}. Ce reste sera reporté sur le mois suivant.</>
+                  <>
+                    Tu as dépensé <b>{formatMoney(-delta, acc.currency)}</b> au quotidien {since}. C'est compté dans tes sorties
+                    {mode === 'month' ? ', et le reste est reporté sur le mois suivant.' : '.'}
+                  </>
                 ) : (
                   <>Il te reste <b>{formatMoney(delta, acc.currency)}</b> de plus que prévu (une entrée non enregistrée ?). Le solde sera corrigé.</>
                 )
@@ -367,6 +417,10 @@ export function CheckpointForm({ onClose, accountId, month: month0, txId }: { on
             </div>
           </div>
         )}
+
+        <Field label="Libellé" hint={isCourant ? 'Modifie-le si c’est autre chose' : undefined}>
+          <Input value={label ?? defaultLabel} onChange={(e) => setLabel(e.target.value)} placeholder={defaultLabel} />
+        </Field>
 
         <Field label="Note" hint="Optionnel">
           <Input value={note} onChange={(e) => setNote(e.target.value)} />

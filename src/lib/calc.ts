@@ -233,8 +233,10 @@ export function computeDerived(db: DB, convert: Converter, base: string, liveRat
   for (const a of accountsArr) {
     const raw = (eventsByAccount.get(a.id) ?? []).sort((x, y) => {
       if (x.date !== y.date) return x.date < y.date ? -1 : 1
-      const cx = x.kind === 'checkpoint' ? 1 : 0
-      const cy = y.kind === 'checkpoint' ? 1 : 0
+      // Une clôture de fin de mois passe après tout ce qui est daté du même jour ;
+      // une mise à jour en cours de mois suit l'ordre de saisie.
+      const cx = x.kind === 'checkpoint' && isMonthEnd(x.date) ? 1 : 0
+      const cy = y.kind === 'checkpoint' && isMonthEnd(y.date) ? 1 : 0
       if (cx !== cy) return cx - cy
       return x.seq - y.seq
     })
@@ -514,10 +516,19 @@ export interface CourantMonth {
   opening: number
   inflows: number
   outflows: number
+  /** Solde estimé : report + entrées − sorties notées − dépenses courantes déjà constatées. */
   expected: number
   closing: number
+  /** Clôture de fin de mois (relevé daté du dernier jour du mois). */
   checkpoint?: Transaction
+  /** Toutes les mises à jour du solde faites dans le mois (clôture comprise). */
+  updates: Transaction[]
+  /** Somme des dépenses courantes constatées dans le mois (undefined si aucune mise à jour). */
   spent?: number
+}
+
+export function isMonthEnd(date: string) {
+  return date === lastDayOf(monthOf(date))
 }
 
 export function courantMonths(d: Derived, accountId: string, months: string[]): CourantMonth[] {
@@ -528,16 +539,22 @@ export function courantMonths(d: Derived, accountId: string, months: string[]): 
     let inflows = 0
     let outflows = 0
     let checkpoint: Transaction | undefined
+    const updates: Transaction[] = []
+    let spent: number | undefined
     for (const ev of st.events) {
       if (monthOf(ev.date) !== m) continue
-      if (ev.kind === 'checkpoint') checkpoint = d.db.transactions[ev.txId!]
-      else if (ev.delta > 0) inflows += ev.delta
+      if (ev.kind === 'checkpoint') {
+        const t = d.db.transactions[ev.txId!]
+        if (!t) continue
+        updates.push(t)
+        if (isMonthEnd(t.date)) checkpoint = t
+        spent = (spent ?? 0) - (d.checkpointDelta.get(t.id) ?? 0)
+      } else if (ev.delta > 0) inflows += ev.delta
       else outflows += -ev.delta
     }
-    const expected = opening + inflows - outflows
+    const expected = opening + inflows - outflows - (spent ?? 0)
     const closing = d.balanceAt(accountId, lastDayOf(m))
-    const spent = checkpoint ? -(d.checkpointDelta.get(checkpoint.id) ?? 0) : undefined
-    return { month: m, opening, inflows, outflows, expected, closing, checkpoint, spent }
+    return { month: m, opening, inflows, outflows, expected, closing, checkpoint, updates, spent }
   })
 }
 

@@ -3,8 +3,8 @@ import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, CalendarClock, CheckCheck,
 import { SegmentBar } from '../components/charts'
 import { txVisual } from '../components/common'
 import { Badge, Button, Card, CardHeader, EmptyState, IconButton, IconChip, Money, MonthPicker, PageHeader, Progress, Stat, cx } from '../components/ui'
-import { expectedAmount, monthlyEquivalent, occurrences, recurringTotals, recurringTx, useDerived, type Occurrence } from '../lib/calc'
-import { currentMonth, dateLabel } from '../lib/dates'
+import { expectedAmount, monthlyEquivalent, occurrences, recurringTotals, recurringTx, useDerived, validatedAmounts, type Occurrence } from '../lib/calc'
+import { currentMonth, dateLabel, monthLabel } from '../lib/dates'
 import { FREQUENCIES, categoryMeta } from '../lib/meta'
 import { uid, useData } from '../lib/store'
 import type { Recurring } from '../lib/types'
@@ -91,7 +91,7 @@ function OccRow({ o }: { o: Occurrence }) {
   )
 }
 
-function RecRow({ r }: { r: Recurring }) {
+function RecRow({ r, month, actual }: { r: Recurring; month: string; actual?: number }) {
   const d = useDerived()
   const acc = d.db.accounts[r.accountId]
   const to = r.toAccountId ? d.db.accounts[r.toAccountId] : undefined
@@ -113,12 +113,12 @@ function RecRow({ r }: { r: Recurring }) {
       </div>
       <div className="text-right">
         <span className="text-sm font-semibold whitespace-nowrap">
-          {r.variable && <span className="text-muted mr-0.5">≈</span>}
-          <Money value={sign ? sign * expectedAmount(r) : expectedAmount(r)} currency={acc?.currency ?? d.base} sign={!!sign} colored={!!sign} />
+          {r.variable && actual == null && <span className="text-muted mr-0.5">≈</span>}
+          <Money value={(sign || 1) * (actual ?? expectedAmount(r, month))} currency={acc?.currency ?? d.base} sign={!!sign} colored={!!sign} />
         </span>
         {r.frequency !== 'monthly' && (
           <div className="text-[11.5px] text-muted">
-            ≈ <Money value={monthlyEquivalent(d, r)} currency={d.base} /> / mois
+            ≈ <Money value={monthlyEquivalent(d, r, month, actual)} currency={d.base} /> / mois
           </div>
         )}
       </div>
@@ -130,7 +130,10 @@ export function Recurrings() {
   const d = useDerived()
   const [month, setMonth] = useState(currentMonth())
   const occ = useMemo(() => occurrences(d, month), [d, month])
-  const totals = useMemo(() => recurringTotals(d), [d])
+  // Les totaux suivent le mois affiché : estimations de ce mois-là, ou montants déjà validés.
+  const totals = useMemo(() => recurringTotals(d, undefined, month), [d, month])
+  const actual = useMemo(() => validatedAmounts(d, month), [d, month])
+  const hasVariable = Object.values(d.db.recurrings).some((r) => r.active && r.variable)
   const recs = Object.values(d.db.recurrings).sort((a, b) => a.day - b.day)
   const done = occ.filter((o) => o.status === 'done').length
   const pending = occ.filter((o) => o.status !== 'done')
@@ -171,7 +174,7 @@ export function Recurrings() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <Stat label="Revenus fixes / mois" value={totals.income} currency={d.base} icon={ArrowDownLeft} color="#10b981" />
+        <Stat label="Revenus fixes / mois" value={totals.income} currency={d.base} icon={ArrowDownLeft} color="#10b981" sub={hasVariable ? `Estimations de ${monthLabel(month).toLowerCase()} comprises` : undefined} />
         <Stat label="Charges fixes / mois" value={totals.expense} currency={d.base} icon={ArrowUpRight} color="#f43f5e" />
         <Stat label="Reste après charges" value={totals.net} currency={d.base} icon={CalendarClock} color="#6366f1" colored sub={totals.income ? `${Math.round((totals.expense / totals.income) * 100)} % des revenus en charges` : undefined} />
         <Stat label="Virements auto / mois" value={totals.transfers} currency={d.base} icon={Repeat} color="#8b5cf6" sub="Épargne, invest, compte courant…" />
@@ -227,11 +230,11 @@ export function Recurrings() {
                 <h3 className="font-semibold text-[15px] text-ink flex items-center gap-2">
                   <g.icon className="size-4" style={{ color: g.color }} /> {g.title}
                 </h3>
-                <Money value={g.items.filter((r) => r.active).reduce((s, r) => s + monthlyEquivalent(d, r), 0)} currency={d.base} className="text-sm font-semibold text-ink-2" />
+                <Money value={g.items.filter((r) => r.active).reduce((s, r) => s + monthlyEquivalent(d, r, month, actual.get(r.id)), 0)} currency={d.base} className="text-sm font-semibold text-ink-2" />
               </div>
               <div className="-mx-1">
                 {g.items.map((r) => (
-                  <RecRow key={r.id} r={r} />
+                  <RecRow key={r.id} r={r} month={month} actual={actual.get(r.id)} />
                 ))}
               </div>
             </Card>

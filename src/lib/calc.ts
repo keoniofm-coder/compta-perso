@@ -677,20 +677,35 @@ export function dueAutoTransactions(db: DB, convert: Converter): Transaction[] {
   return out
 }
 
-export function monthlyEquivalent(d: Derived, r: Recurring) {
+/**
+ * Équivalent mensuel d'un flux fixe, dans la devise principale. Avec un mois : l'estimation de ce mois-là
+ * (ou le montant réellement validé, s'il est fourni).
+ */
+export function monthlyEquivalent(d: Derived, r: Recurring, month?: string, actual?: number) {
   const acc = d.db.accounts[r.accountId]
-  return d.convert((expectedAmount(r) * FREQUENCIES[r.frequency].perYear) / 12, acc?.currency ?? d.base)
+  const amount = actual ?? expectedAmount(r, month)
+  return d.convert((amount * FREQUENCIES[r.frequency].perYear) / 12, acc?.currency ?? d.base)
 }
 
-export function recurringTotals(d: Derived, scope?: 'perso' | 'pro') {
+/** Montants réellement validés pour un mois, par flux fixe. */
+export function validatedAmounts(d: Derived, month: string) {
+  const out = new Map<string, number>()
+  for (const t of d.transactions) if (t.recurringId && t.recurringPeriod === month) out.set(t.recurringId, t.amount)
+  return out
+}
+
+export function recurringTotals(d: Derived, scope?: 'perso' | 'pro', month?: string) {
   let income = 0
   let expense = 0
   let transfers = 0
+  const actual = month ? validatedAmounts(d, month) : undefined
+  const ref = month ?? currentMonth()
   for (const r of Object.values(d.db.recurrings)) {
     if (!r.active) continue
-    if (r.endMonth && r.endMonth < currentMonth()) continue
+    if (r.endMonth && r.endMonth < ref) continue
+    if (month && r.startMonth > month) continue
     if (scope && r.scope !== scope) continue
-    const v = monthlyEquivalent(d, r)
+    const v = monthlyEquivalent(d, r, month, actual?.get(r.id))
     if (r.kind === 'income') income += v
     else if (r.kind === 'expense') expense += v
     else transfers += v
